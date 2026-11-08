@@ -31,7 +31,7 @@
 
 ```bash
 npm install
-npm run demo          # start the hub with interactive simulated agents
+npm start             # start the hub on http://localhost:4747
 npm run panel         # open the native macOS side panel (compiles once with swiftc)
 ```
 

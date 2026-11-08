@@ -4,7 +4,7 @@
 
 ## How to test
 
-<!-- Steps a reviewer can follow, e.g. `npm run demo` then … -->
+<!-- Steps a reviewer can follow, e.g. `npm start` then … -->
 
 ## Checklist
 

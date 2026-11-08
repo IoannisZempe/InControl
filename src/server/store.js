@@ -55,7 +55,6 @@ export class AgentStore extends EventEmitter {
       pendingPrompt: payload.pendingPrompt !== undefined ? payload.pendingPrompt : (existing?.pendingPrompt || null),
       windowHint: payload.windowHint ?? existing?.windowHint ?? null,
       pid: payload.pid ?? existing?.pid ?? null,
-      isSimulated: Boolean(payload.isSimulated ?? existing?.isSimulated ?? false),
       queuedMessages: existing?.queuedMessages || [],
       logs: existing?.logs || [],
       metrics: {

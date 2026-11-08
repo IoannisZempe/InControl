@@ -8,7 +8,7 @@ Thanks for helping! InControl aims to be the place where you can see every AI ag
 git clone https://github.com/IoannisZempe/InControl.git
 cd InControl
 npm install
-npm run demo     # hub + simulated agents at http://localhost:4747
+npm start        # hub at http://localhost:4747
 npm test
 ```
 

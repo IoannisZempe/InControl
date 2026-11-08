@@ -17,7 +17,7 @@ const SECTION_LABEL = {
   idle: '⚪ Idle',
 };
 
-let state = { agents: [], counts: {}, simulatorActive: false, network: {}, globalEvents: [] };
+let state = { agents: [], counts: {}, network: {}, globalEvents: [] };
 let filter = 'all';
 let ws = null;
 let reconnectDelay = 500;
@@ -84,7 +84,6 @@ function render() {
   renderCounts();
   renderAgents();
   renderActivity();
-  $('#btn-demo').classList.toggle('active', state.simulatorActive);
   detectNewInputRequests();
 }
 
@@ -127,10 +126,9 @@ function renderAgents() {
       <div class="empty-state">
         <div class="big">🛰️</div>
         <h3>No agents connected yet</h3>
-        <p>Connect Claude Code, Antigravity, Cursor, CLI agents or your own custom agents — or start the interactive demo.</p>
+        <p>Connect Claude Code, Antigravity, Cursor, CLI agents, or your own custom agents.</p>
         <div class="row">
           <button class="action-btn primary" data-act="open-connect">+ Connect agent</button>
-          <button class="action-btn" data-act="start-demo">Start demo</button>
         </div>
       </div>`;
     return;
@@ -217,7 +215,7 @@ function renderCard(a) {
         <div class="card-identity">
           <div class="provider-avatar provider-${esc(a.provider)}">${initials}</div>
           <div class="card-titles">
-            <div class="agent-name"><span>${esc(a.name)} · ${esc(a.projectName)}</span>${a.isSimulated ? '<span class="demo-tag" title="Simulated example agent — click Demo in top bar to hide">Demo</span>' : ''}</div>
+            <div class="agent-name">${esc(a.name)} · ${esc(a.projectName)}</div>
             <div class="agent-meta">${esc(a.ide)}${a.branch ? ` · <span class="branch">${esc(a.branch)}</span>` : ''}</div>
           </div>
         </div>
@@ -319,8 +317,6 @@ document.addEventListener('click', async (e) => {
       return renderAgents();
     case 'open-connect':
       return $('#modal-connect').classList.remove('hidden');
-    case 'start-demo':
-      return toggleDemo();
   }
 });
 
@@ -352,7 +348,6 @@ $('#btn-project').addEventListener('click', () => {
 });
 
 $('#btn-connect').addEventListener('click', () => $('#modal-connect').classList.remove('hidden'));
-$('#btn-demo').addEventListener('click', toggleDemo);
 
 $('#btn-sound').addEventListener('click', () => {
   soundOn = !soundOn;
@@ -363,15 +358,9 @@ $('#btn-sound').addEventListener('click', () => {
 });
 $('#sound-icon').textContent = soundOn ? '🔔' : '🔕';
 
-$('#toggle-activity').addEventListener('click', (e) => {
-  if (e.target.closest('#btn-sim-prompt')) return;
+$('#toggle-activity').addEventListener('click', () => {
   $('#activity-drawer').classList.toggle('hidden');
   $('#activity-chevron').classList.toggle('open');
-});
-
-$('#btn-sim-prompt').addEventListener('click', async (e) => {
-  e.stopPropagation();
-  await fetch('/api/simulator/trigger-prompt', { method: 'POST' });
 });
 
 $('#btn-fire-custom').addEventListener('click', async () => {
@@ -400,10 +389,6 @@ $('#btn-fire-custom').addEventListener('click', async () => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') $$('.modal-backdrop').forEach((m) => m.classList.add('hidden'));
 });
-
-async function toggleDemo() {
-  await fetch('/api/simulator/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-}
 
 // Re-render relative timestamps every 15s
 setInterval(() => {

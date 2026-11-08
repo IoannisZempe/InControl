@@ -170,14 +170,7 @@ code, pre { font-family: var(--mono); }
 .provider-custom { background: rgba(167, 139, 250, 0.2); color: #c4b5fd; }
 
 .card-titles { min-width: 0; }
-.agent-name { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; display: flex; align-items: center; gap: 6px; }
-.agent-name > span:first-child { overflow: hidden; text-overflow: ellipsis; }
-.demo-tag {
-  font-size: 9px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
-  padding: 1px 5px; border-radius: 4px;
-  background: rgba(129, 140, 248, 0.16); color: var(--accent);
-  border: 1px solid rgba(129, 140, 248, 0.3); flex-shrink: 0;
-}
+.agent-name { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agent-meta { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agent-meta .branch { font-family: var(--mono); color: var(--dim); }
 
@@ -372,5 +365,4 @@ code, pre { font-family: var(--mono); }
 /* Narrow side panel tweaks */
 @media (max-width: 380px) {
   .chip-btn { padding: 5px 7px; }
-  #btn-demo { display: none; }
 }

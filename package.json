@@ -28,7 +28,6 @@
   },
   "scripts": {
     "start": "node ./bin/incontrol.js start",
-    "demo": "node ./bin/incontrol.js start --demo",
     "panel": "node ./bin/incontrol.js panel",
     "build:macos": "swiftc macos/InControlPanel.swift -o macos/incontrol-panel -framework Cocoa -framework WebKit",
     "mcp": "node ./bin/incontrol.js mcp",

@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import QRCode from 'qrcode';
 import { AgentStore } from './store.js';
-import { AgentSimulator } from './simulator.js';
 import { focusAgentWindow, sendMacNotification } from './macos-focus.js';
 import {
   loadOrCreateToken,
@@ -78,11 +77,6 @@ export async function createInControlHub(options = {}) {
   const requireLocal = Boolean(options.strict);
 
   const store = new AgentStore();
-  const simulator = new AgentSimulator(store);
-
-  if (options.demo) {
-    simulator.start();
-  }
 
   const network = discoverNetworkUrls(port);
   network.pairingUrl = `${network.primaryProjectionUrl}/?token=${encodeURIComponent(token)}`;
@@ -142,7 +136,7 @@ export async function createInControlHub(options = {}) {
     try {
       // 1. GET /api/state — Full state snapshot
       if (req.method === 'GET' && pathname === '/api/state') {
-        return sendJson(res, 200, buildFullState(store, simulator, network, qrSvg));
+        return sendJson(res, 200, buildFullState(store, network, qrSvg));
       }
 
       // 2. POST /api/agents/event — Register or update agent state
@@ -226,37 +220,7 @@ export async function createInControlHub(options = {}) {
         return sendJson(res, 200, { ok: existed });
       }
 
-      // 8. POST /api/simulator/toggle — Enable/disable simulated demo agents
-      if (req.method === 'POST' && pathname === '/api/simulator/toggle') {
-        const body = await readJsonBody(req);
-        const shouldEnable = body.enabled !== undefined ? Boolean(body.enabled) : !simulator.active;
-        if (shouldEnable) {
-          simulator.start();
-        } else {
-          simulator.stop();
-        }
-        return sendJson(res, 200, { ok: true, simulatorActive: simulator.active });
-      }
-
-      // 9. POST /api/simulator/trigger-prompt — Simulate an incoming blocking prompt
-      if (req.method === 'POST' && pathname === '/api/simulator/trigger-prompt') {
-        if (!simulator.active) simulator.start();
-        store.requestInput('sim-agy-incontrol', {
-          wait: false,
-          question: 'Ready to publish @incontrol/agents v0.1.0 and push tags to origin/main?',
-          toolName: 'Bash',
-          command: 'git push origin main --tags && npm publish --access public',
-          options: [
-            { id: 'approve', label: 'Approve Push', style: 'primary' },
-            { id: 'push_only', label: 'Git Push Only', style: 'secondary' },
-            { id: 'deny', label: 'Hold Off', style: 'danger' },
-          ],
-          allowFreeText: true,
-        });
-        return sendJson(res, 200, { ok: true });
-      }
-
-      // 10. Static file serving (Web UI / PWA)
+      // 8. Static file serving (Web UI / PWA)
       let filePath = pathname === '/' ? path.join(PUBLIC_DIR, 'index.html') : path.join(PUBLIC_DIR, pathname);
       // Prevent directory traversal
       if (!filePath.startsWith(PUBLIC_DIR)) {
@@ -307,7 +271,7 @@ export async function createInControlHub(options = {}) {
     broadcast({
       type: 'state_sync',
       changeEvent,
-      state: buildFullState(store, simulator, network, qrSvg),
+      state: buildFullState(store, network, qrSvg),
     });
   });
 
@@ -328,7 +292,7 @@ export async function createInControlHub(options = {}) {
     ws.send(
       JSON.stringify({
         type: 'state_sync',
-        state: buildFullState(store, simulator, network, qrSvg),
+        state: buildFullState(store, network, qrSvg),
       })
     );
 
@@ -340,9 +304,6 @@ export async function createInControlHub(options = {}) {
         } else if (msg.type === 'focus' && msg.agentId) {
           const agent = store.agents.get(msg.agentId);
           if (agent) await focusAgentWindow(agent);
-        } else if (msg.type === 'toggle_simulator') {
-          if (simulator.active) simulator.stop();
-          else simulator.start();
         }
       } catch {
         // Ignore malformed WS messages
@@ -359,24 +320,21 @@ export async function createInControlHub(options = {}) {
     server,
     wss,
     store,
-    simulator,
     network,
     port,
     token,
     close: () =>
       new Promise((resolve) => {
-        simulator.stop();
         wss.close();
         server.close(() => resolve());
       }),
   };
 }
 
-function buildFullState(store, simulator, network, qrSvg) {
+function buildFullState(store, network, qrSvg) {
   return {
     agents: store.getSortedAgents(),
     counts: store.getSummaryCounts(),
-    simulatorActive: simulator.active,
     network,
     qrSvg,
     globalEvents: store.globalEvents.slice(0, 25),

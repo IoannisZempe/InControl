@@ -23,7 +23,6 @@ async function main() {
       const { createInControlHub } = await import('../src/server/hub.js');
       const hub = await createInControlHub({
         port: flag('--port'),
-        demo: args.includes('--demo'),
         macNotifications: !args.includes('--no-notify'),
         localOnly: args.includes('--local-only'),
         strict: args.includes('--strict'),
@@ -36,7 +35,6 @@ async function main() {
   Local:      ${n.localUrl}
   Phone/LAN:  ${args.includes('--local-only') ? '(disabled: --local-only)' : n.lanUrl || '(no LAN interface found)'}
   Tailscale:  ${n.tailscaleUrl || '(not detected)'}
-  Demo:       ${hub.simulator.active ? 'on' : 'off'}
   Auth:       pairing token required for other devices${args.includes('--strict') ? ' (and localhost: --strict)' : ''}
 
   Pair a phone: tap 📱 in the panel and scan the QR code, or run \`incontrol token\`
@@ -140,7 +138,7 @@ Keep this secret — anyone with it can answer your agents.`);
       console.log(`InControl — mission control side panel for AI agents
 
 Usage:
-  incontrol start [--port 4747] [--demo] [--panel] [--no-notify]   Start the hub + web UI
+  incontrol start [--port 4747] [--panel] [--no-notify]            Start the hub + web UI
         [--local-only]   bind to 127.0.0.1 (no phone access)
         [--strict]       require the token even from localhost
   incontrol token [--rotate]                                       Show / rotate the device pairing token

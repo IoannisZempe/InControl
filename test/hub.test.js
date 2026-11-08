@@ -38,12 +38,14 @@ test('hub: register agent, blocking ask resolved by panel reply', async () => {
 });
 
 test('store: agents sorted by attention priority', async () => {
-  const hub = await createInControlHub({ port: 4798, macNotifications: false, demo: true, token: 't' });
+  const hub = await createInControlHub({ port: 4798, macNotifications: false, token: 't' });
   try {
+    hub.store.upsertAgent({ id: 'a1', name: 'IdleBot', status: 'idle' });
+    hub.store.upsertAgent({ id: 'a2', name: 'WorkBot', status: 'working' });
+    hub.store.upsertAgent({ id: 'a3', name: 'InputBot', status: 'needs_input' });
+    hub.store.upsertAgent({ id: 'a4', name: 'ReviewBot', status: 'needs_attention' });
     const statuses = hub.store.getSortedAgents().map((a) => a.status);
-    const order = ['needs_input', 'needs_attention', 'working', 'idle'];
-    const ranks = statuses.map((s) => order.indexOf(s));
-    assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b));
+    assert.deepEqual(statuses, ['needs_input', 'needs_attention', 'working', 'idle']);
   } finally {
     await hub.close();
   }
