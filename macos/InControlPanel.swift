@@ -73,14 +73,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
 
-        // Native Apple vibrancy container (hudWindow material, stays active when unfocused)
+        // Native Apple vibrancy container (popover/HUD glass material, stays active when unfocused)
         let visualEffect = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: panelWidth, height: 820))
-        visualEffect.material = .hudWindow
+        visualEffect.material = .popover
         visualEffect.blendingMode = .behindWindow
         visualEffect.state = .active
         visualEffect.wantsLayer = true
-        visualEffect.layer?.cornerRadius = 14
+        visualEffect.layer?.cornerRadius = 18
         visualEffect.layer?.masksToBounds = true
+        visualEffect.layer?.borderWidth = 0.8
+        visualEffect.layer?.borderColor = NSColor(white: 1.0, alpha: 0.22).cgColor
         visualEffect.autoresizingMask = [.width, .height]
 
         let config = WKWebViewConfiguration()
