@@ -20,12 +20,16 @@
 ## Features
 
 - **Triage view.** Agents are sorted into four groups: *Needs input → Needs attention → Working → Idle*.
-- **Answer from anywhere.** Approve, deny, or type a reply from the side panel or your phone. Blocked agents pick up your answer right away.
-- **Jump to window.** On macOS, one click brings the right IDE or terminal window to the front.
-- **Native macOS side panel.** A floating panel docked to the right edge of the screen that stays on top and appears on every Space. A menu bar badge shows how many agents are waiting on you.
-- **Phone, tablet, and other devices.** Scan the QR code to open the panel over your LAN or Tailscale. You can add it to your home screen as an app (PWA).
-- **Alerts.** macOS notifications, a sound in the panel, browser notifications, and vibration on phones.
-- **Local-first.** Everything runs on your machine. No cloud or account needed.
+- **Zero-config auto-discovery.** Automatically detects live **Antigravity**, **ChatGPT Desktop (`ChatGPT.app`)**, and **OpenAI Codex** sessions on your Mac with zero manual wrapping.
+- **Two-way remote control.** Approve, deny, stop, or type a steering reply from the side panel or your phone:
+  - **Antigravity:** Native `PreInvocation`, `PreToolUse`, `PostToolUse`, and `Stop` lifecycle hooks inject your panel/phone messages directly into the next model step (`injectSteps`) or auto-continue finished turns.
+  - **ChatGPT Desktop & Codex:** Queues follow-up/steering prompts directly into active threads via `codex queue --thread <id> --message <text>` and MCP tools.
+  - **Claude Code & Cursor:** Native lifecycle hooks (`~/.claude/settings.json`) and stdio MCP server.
+- **WhatsApp auto-escalation.** If an agent is waiting in *Needs Input* and you don't respond within your chosen timeout (`30s`–`5m`), InControl automatically sends the prompt and a 1-tap mobile link to your WhatsApp (via CallMeBot, Twilio two-way webhook, Meta Cloud API, or custom webhook).
+- **Jump to window.** On macOS, one click brings the right IDE (`Antigravity`, `ChatGPT`, `Cursor`, `VS Code`) or terminal window (`iTerm2`, `Ghostty`, `Warp`, `Terminal`) to the front.
+- **Apple Liquid Glass macOS side panel.** A native Cocoa `NSPanel` + `NSVisualEffectView` floating panel docked to the right edge of your screen with frosted glass platters and a menu bar status item.
+- **Phone, tablet, and other devices.** Scan the QR code to open the panel over your LAN or Tailscale.
+- **Local-first.** Everything runs on your machine. No cloud account needed.
 
 ## Quick start
 

@@ -111,7 +111,7 @@ function scanAntigravitySessions(store, seenMtimes) {
     }
 
     const agentId = `agy-${item.convId.slice(0, 8)}`;
-    const wsPath = workspace || '/Users/ioannisz/Repo/InControl';
+    const wsPath = workspace || process.cwd();
     const projectName = path.basename(wsPath) || 'Antigravity';
     const ageMs = Date.now() - item.mtimeMs;
 
