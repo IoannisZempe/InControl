@@ -24,7 +24,7 @@ const CURSOR_MCP_CONFIG = path.join(HOME, '.cursor', 'mcp.json');
  * Starts automatic background watching of local Antigravity, Codex, and ChatGPT Desktop sessions
  * so they appear in InControl with zero manual wrapping required.
  */
-export function startAutoWatcher(store, intervalMs = 3000) {
+export function startAutoWatcher(store, intervalMs = 1500) {
   const seenMtimes = new Map();
 
   function scanAll() {
@@ -216,8 +216,8 @@ function scanCodexAndChatGptSessions(store, seenMtimes) {
     }
   }
 
-  const recentFiles = findRecentJsonlFiles(CODEX_SESSIONS_DIR, 10);
-  const seenWorkspaces = new Set();
+  const recentFiles = findRecentJsonlFiles(CODEX_SESSIONS_DIR, 12);
+  const byWorkspace = new Map();
 
   for (const file of recentFiles) {
     const headLine = readFirstLine(file.path);
@@ -230,92 +230,184 @@ function scanCodexAndChatGptSessions(store, seenMtimes) {
     } catch {}
 
     const cwd = meta.cwd || HOME;
-    if (seenWorkspaces.has(cwd)) continue;
-    seenWorkspaces.add(cwd);
-    if (seenWorkspaces.size > 3) break;
+    // Skip internal review-only threads if we already have a newer file, or group all files for this cwd
+    if (!byWorkspace.has(cwd)) {
+      byWorkspace.set(cwd, []);
+    }
+    byWorkspace.get(cwd).push({ file, meta });
+  }
 
-    const threadId = meta.parent_thread_id || meta.session_id || meta.id || path.basename(file.path, '.jsonl');
-    const key = `codex:${cwd}`;
-    if (seenMtimes.get(key) === file.mtimeMs) continue;
-    seenMtimes.set(key, file.mtimeMs);
+  const activeIds = new Set();
 
-    const tailLines = readTailLines(file.path, 25);
-    const sessionId = threadId;
-    const threadTitle =
-      threadNames.get(sessionId) ||
-      threadNames.get(meta.parent_thread_id) ||
-      'Codex / ChatGPT task';
+  for (const [cwd, items] of byWorkspace.entries()) {
+    if (activeIds.size >= 4) break;
+    // Primary file is the most recently modified file in this workspace
+    const primary = items[0];
+    const { file, meta } = primary;
     const projectName = path.basename(cwd) || 'workspace';
+    const agentId = `codex-${projectName.toLowerCase().replace(/[^a-z0-9-]+/g, '-')}`;
+    activeIds.add(agentId);
+
+    const maxMtime = Math.max(...items.map((i) => i.file.mtimeMs));
+    const key = `codex:${cwd}`;
+    if (seenMtimes.get(key) === maxMtime && store.agents.has(agentId)) continue;
+    seenMtimes.set(key, maxMtime);
+
+    // Find thread title from main thread ID or parent_thread_id
+    let threadTitle = null;
+    for (const item of items) {
+      const tid = item.meta.parent_thread_id || item.meta.session_id || item.meta.id;
+      if (tid && threadNames.has(tid)) {
+        threadTitle = threadNames.get(tid);
+        break;
+      }
+    }
+    threadTitle = threadTitle || 'Codex / ChatGPT task';
+
     const branch = meta.git?.branch || 'main';
-    const originator = String(meta.originator || 'Codex');
+    const originator = String(meta.originator || 'Codex Desktop');
     const isDesktopApp =
       originator.toLowerCase().includes('desktop') ||
-      originator.toLowerCase().includes('chatgpt');
+      originator.toLowerCase().includes('chatgpt') ||
+      items.some((i) => String(i.meta.originator || '').toLowerCase().includes('desktop'));
 
     const agentName = isDesktopApp ? 'ChatGPT / Codex' : 'Codex CLI';
     const ideName = isDesktopApp ? 'ChatGPT App' : 'Terminal';
 
-    let status = 'idle';
-    let currentStep = 'Standing by';
-    let attentionReason = null;
-    let pendingPrompt = null;
-    const ageMs = Date.now() - file.mtimeMs;
+    // Evaluate up to 4 recent rollout files in this workspace (main thread + any subagents)
+    // Priority: needs_input (0) > working (1) > needs_attention (2) > idle (3)
+    const RANK = { needs_input: 0, working: 1, needs_attention: 2, idle: 3 };
+    let best = {
+      status: 'idle',
+      currentStep: 'Idle',
+      attentionReason: null,
+      pendingPrompt: null,
+    };
+    let latestUserPrompt = null;
 
-    for (const raw of tailLines) {
-      try {
-        const ev = JSON.parse(raw);
-        const p = ev.payload || {};
-        if (ev.type === 'event_msg') {
-          if (
-            p.type === 'exec_approval_request' ||
-            p.type === 'apply_patch_approval_request' ||
-            p.type === 'request_user_input'
-          ) {
-            status = 'needs_input';
-            const cmd = Array.isArray(p.command) ? p.command.join(' ') : p.command || '';
-            currentStep = 'Waiting for approval in ' + ideName;
-            pendingPrompt = {
-              requestId: `codex_${ev.ordinal || Date.now()}`,
-              question: p.reason || `Approve command in ${projectName}?`,
-              command: cmd || null,
-              options: [{ id: 'acknowledge', label: 'Focus & Approve', style: 'primary' }],
-              allowFreeText: false,
-              createdAt: file.mtimeMs,
-            };
-          } else if (p.type === 'task_complete') {
-            status = ageMs < 30 * 60_000 ? 'needs_attention' : 'idle';
-            currentStep = status === 'needs_attention' ? 'Turn completed' : 'Idle';
-            attentionReason = p.last_agent_message
-              ? String(p.last_agent_message).slice(0, 110)
-              : 'Task completed in ' + agentName;
-            pendingPrompt = null;
-          } else if (p.type === 'task_started' || p.type === 'exec_command_begin') {
-            if (ageMs < 10 * 60_000) {
-              status = 'working';
-              currentStep = p.command
-                ? `Running: ${Array.isArray(p.command) ? p.command.join(' ') : p.command}`
-                : 'Executing task…';
-              pendingPrompt = null;
+    for (const item of items.slice(0, 4)) {
+      const tailLines = readTailLines(item.file.path, 40);
+      const ageMs = Date.now() - item.file.mtimeMs;
+      let st = ageMs < 120_000 ? 'working' : 'idle';
+      let step = ageMs < 120_000 ? 'Working…' : 'Idle';
+      let reason = null;
+      let prompt = null;
+
+      for (const raw of tailLines) {
+        try {
+          const ev = JSON.parse(raw);
+          const p = ev.payload || {};
+
+          if (ev.type === 'response_item') {
+            if (p.type === 'message' && p.role === 'user' && Array.isArray(p.content)) {
+              const txt = p.content.find((c) => c.text)?.text || '';
+              if (
+                txt &&
+                !txt.startsWith('The following is the Codex agent history') &&
+                !txt.startsWith('<environment_context>')
+              ) {
+                latestUserPrompt = latestUserPrompt || txt.trim().replace(/\s+/g, ' ').slice(0, 110);
+              }
+            } else if (p.type === 'custom_tool_call' || p.type === 'function_call') {
+              st = 'working';
+              const toolName = p.name || 'tool';
+              const rawInput =
+                typeof p.input === 'string' ? p.input : JSON.stringify(p.input || p.arguments || '');
+              const cmdMatch = rawInput.match(/cmd:\s*"([^"]+)"/);
+              const cleanCmd = cmdMatch ? cmdMatch[1] : rawInput.slice(0, 80);
+              step = `${toolName}: ${cleanCmd}`;
+              prompt = null;
+            } else if (p.type === 'reasoning') {
+              st = 'working';
+              const summaryText =
+                Array.isArray(p.summary) && p.summary[0]?.text
+                  ? p.summary[0].text.replace(/\*\*/g, '').trim()
+                  : null;
+              if (summaryText) step = summaryText;
+              prompt = null;
+            } else if (p.type === 'custom_tool_call_output' || p.type === 'function_call_output') {
+              st = 'working';
+            }
+          } else if (ev.type === 'event_msg') {
+            if (
+              p.type === 'exec_approval_request' ||
+              p.type === 'apply_patch_approval_request' ||
+              p.type === 'request_user_input'
+            ) {
+              st = 'needs_input';
+              const cmd = Array.isArray(p.command) ? p.command.join(' ') : p.command || '';
+              step = 'Waiting for approval in ' + ideName;
+              prompt = {
+                requestId: `codex_${ev.ordinal || Date.now()}`,
+                question: p.reason || `Approve command in ${projectName}?`,
+                command: cmd || null,
+                options: [{ id: 'acknowledge', label: 'Focus & Approve', style: 'primary' }],
+                allowFreeText: false,
+                createdAt: item.file.mtimeMs,
+              };
+            } else if (p.type === 'task_complete' || p.type === 'turn_aborted') {
+              st = ageMs < 20 * 60_000 ? 'needs_attention' : 'idle';
+              step = st === 'needs_attention' ? 'Turn completed' : 'Idle';
+              const msg = p.last_agent_message
+                ? String(p.last_agent_message).replace(/\s+/g, ' ').trim()
+                : '';
+              // Ignore internal approval reviewer JSON verdicts as attentionReason
+              if (msg && !msg.startsWith('{')) {
+                reason = msg.slice(0, 110);
+              } else {
+                reason = 'Turn completed in ' + agentName;
+              }
+              prompt = null;
+            } else if (
+              p.type === 'task_started' ||
+              p.type === 'exec_command_begin' ||
+              p.type === 'agent_reasoning' ||
+              p.type === 'item_completed' ||
+              p.type === 'token_count'
+            ) {
+              if (ageMs < 10 * 60_000) {
+                st = 'working';
+                if (p.command) {
+                  step = `Running: ${Array.isArray(p.command) ? p.command.join(' ') : p.command}`;
+                }
+                prompt = null;
+              }
             }
           }
-        }
-      } catch {}
+        } catch {}
+      }
+
+      if (st === 'working' && ageMs > 5 * 60_000) {
+        st = 'idle';
+        step = 'Idle';
+      }
+
+      if ((RANK[st] ?? 9) < (RANK[best.status] ?? 9)) {
+        best = { status: st, currentStep: step, attentionReason: reason, pendingPrompt: prompt };
+      }
     }
 
     store.upsertAgent({
-      id: `codex-${sessionId.slice(0, 10)}`,
+      id: agentId,
       name: agentName,
       provider: 'codex',
       ide: ideName,
       workspace: cwd,
       projectName,
       branch,
-      status,
-      currentTask: threadTitle,
-      currentStep,
-      attentionReason,
-      pendingPrompt,
+      status: best.status,
+      currentTask: latestUserPrompt || threadTitle,
+      currentStep: best.currentStep,
+      attentionReason: best.attentionReason,
+      pendingPrompt: best.pendingPrompt,
     });
+  }
+
+  // Remove any legacy duplicate codex-* entries that aren't in activeIds
+  for (const existingId of store.agents.keys()) {
+    if (existingId.startsWith('codex-') && !activeIds.has(existingId)) {
+      store.removeAgent(existingId);
+    }
   }
 }
 
