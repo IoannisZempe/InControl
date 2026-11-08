@@ -82,8 +82,16 @@ function render() {
   renderCounts();
   renderAgents();
   renderIntegrations();
+  renderWhatsAppStatus();
   renderActivity();
   detectNewInputRequests();
+}
+
+function renderWhatsAppStatus() {
+  const btn = $('#btn-whatsapp');
+  if (!btn) return;
+  const wa = state.whatsapp || {};
+  btn.classList.toggle('wa-active', Boolean(wa.enabled));
 }
 
 function renderIntegrations() {
@@ -432,6 +440,97 @@ $('#btn-project').addEventListener('click', () => {
 });
 
 $('#btn-connect').addEventListener('click', () => $('#modal-connect').classList.remove('hidden'));
+
+function syncWhatsAppProviderPane(provider) {
+  $$('.wa-provider-pane').forEach((p) => p.classList.add('hidden'));
+  const pane = $(`#wa-pane-${provider}`);
+  if (pane) pane.classList.remove('hidden');
+  $('#wa-phone-wrap').classList.toggle('hidden', provider === 'webhook');
+}
+
+function populateWhatsAppForm() {
+  const wa = state.whatsapp || {};
+  $('#wa-enabled').checked = wa.enabled !== false;
+  $('#wa-timeout').value = String(wa.timeoutSec || 60);
+  $('#wa-provider').value = wa.provider || 'callmebot';
+  $('#wa-attention').checked = Boolean(wa.notifyOnAttention);
+  $('#wa-phone').value = wa.phone || '';
+  $('#wa-callmebot-key').value = wa.callmebotApiKey || '';
+  $('#wa-twilio-sid').value = wa.twilioSid || '';
+  $('#wa-twilio-token').value = wa.twilioToken || '';
+  $('#wa-twilio-from').value = wa.twilioFrom || 'whatsapp:+14155238886';
+  $('#wa-cloud-phone-id').value = wa.cloudPhoneId || '';
+  $('#wa-cloud-token').value = wa.cloudToken || '';
+  $('#wa-webhook-url').value = wa.webhookUrl || '';
+  syncWhatsAppProviderPane($('#wa-provider').value);
+}
+
+$('#btn-whatsapp')?.addEventListener('click', () => {
+  populateWhatsAppForm();
+  $('#modal-whatsapp').classList.remove('hidden');
+});
+
+$('#wa-provider')?.addEventListener('change', (e) => {
+  syncWhatsAppProviderPane(e.target.value);
+});
+
+$('#form-whatsapp')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const payload = {
+    enabled: $('#wa-enabled').checked,
+    timeoutSec: Number($('#wa-timeout').value || 60),
+    provider: $('#wa-provider').value,
+    notifyOnAttention: $('#wa-attention').checked,
+    phone: $('#wa-phone').value.trim(),
+    callmebotApiKey: $('#wa-callmebot-key').value.trim(),
+    twilioSid: $('#wa-twilio-sid').value.trim(),
+    twilioToken: $('#wa-twilio-token').value.trim(),
+    twilioFrom: $('#wa-twilio-from').value.trim(),
+    cloudPhoneId: $('#wa-cloud-phone-id').value.trim(),
+    cloudToken: $('#wa-cloud-token').value.trim(),
+    webhookUrl: $('#wa-webhook-url').value.trim(),
+  };
+  const res = await fetch('/api/whatsapp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (data.whatsapp) {
+    state.whatsapp = data.whatsapp;
+    renderWhatsAppStatus();
+  }
+  toast(data.message || 'Saved WhatsApp settings');
+  $('#modal-whatsapp').classList.add('hidden');
+});
+
+$('#btn-wa-test')?.addEventListener('click', async () => {
+  const btn = $('#btn-wa-test');
+  btn.textContent = 'Sending…';
+  // Save current form values first so test uses them
+  await fetch('/api/whatsapp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      enabled: $('#wa-enabled').checked,
+      timeoutSec: Number($('#wa-timeout').value || 60),
+      provider: $('#wa-provider').value,
+      notifyOnAttention: $('#wa-attention').checked,
+      phone: $('#wa-phone').value.trim(),
+      callmebotApiKey: $('#wa-callmebot-key').value.trim(),
+      twilioSid: $('#wa-twilio-sid').value.trim(),
+      twilioToken: $('#wa-twilio-token').value.trim(),
+      twilioFrom: $('#wa-twilio-from').value.trim(),
+      cloudPhoneId: $('#wa-cloud-phone-id').value.trim(),
+      cloudToken: $('#wa-cloud-token').value.trim(),
+      webhookUrl: $('#wa-webhook-url').value.trim(),
+    }),
+  });
+  const res = await fetch('/api/whatsapp/test', { method: 'POST' });
+  const data = await res.json().catch(() => ({}));
+  btn.textContent = 'Send Test';
+  toast(data.ok ? data.message : data.error || 'WhatsApp test failed');
+});
 
 $('#btn-sound').addEventListener('click', () => {
   soundOn = !soundOn;

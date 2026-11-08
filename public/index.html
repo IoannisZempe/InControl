@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#161618" />
   <link rel="manifest" href="/manifest.json" />
   <title>InControl</title>
-  <link rel="stylesheet" href="/styles.css?v=4" />
+  <link rel="stylesheet" href="/styles.css?v=5" />
 </head>
 <body>
   <div class="app-shell">
@@ -29,6 +29,9 @@
           <button id="btn-sound" class="icon-btn" title="Toggle sound alerts" aria-label="Toggle Sound">
             <svg id="icon-sound-on" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             <svg id="icon-sound-off" class="hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+          <button id="btn-whatsapp" class="icon-btn" title="WhatsApp auto-escalation when unanswered" aria-label="WhatsApp Escalation">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
           </button>
           <button id="btn-project" class="icon-btn" title="Pair iPhone or iPad (QR)" aria-label="Pair Device">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5" ry="2.5"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
@@ -135,6 +138,112 @@ incontrol wrap --name "Aider" -- aider</pre>
     </div>
   </div>
 
-  <script src="/app.js?v=3" type="module"></script>
+  <!-- Modal: WhatsApp Auto-Escalation -->
+  <div id="modal-whatsapp" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whatsapp-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="modal-whatsapp-title">WhatsApp Auto-Escalation</h2>
+        <button class="modal-close" data-close="modal-whatsapp" aria-label="Close">✕</button>
+      </div>
+      <p class="modal-subtitle">
+        If an agent is waiting for your input and you don't respond in time, InControl automatically sends the prompt + a 1-tap mobile link to your WhatsApp.
+      </p>
+
+      <form id="form-whatsapp" class="wa-form">
+        <label class="wa-toggle-row">
+          <span>Enable WhatsApp escalation</span>
+          <input type="checkbox" id="wa-enabled" checked />
+        </label>
+
+        <div class="wa-row-2">
+          <div class="wa-field">
+            <label for="wa-timeout">If no reply after</label>
+            <select id="wa-timeout" class="wa-input">
+              <option value="30">30 seconds</option>
+              <option value="60" selected>60 seconds</option>
+              <option value="120">2 minutes</option>
+              <option value="300">5 minutes</option>
+            </select>
+          </div>
+          <div class="wa-field">
+            <label for="wa-provider">Provider</label>
+            <select id="wa-provider" class="wa-input">
+              <option value="callmebot">CallMeBot (Free / 1-min)</option>
+              <option value="twilio">Twilio WhatsApp (2-way)</option>
+              <option value="cloud_api">Meta Cloud API</option>
+              <option value="webhook">Custom Webhook</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="wa-toggle-row">
+          <span>Also message when task finishes (Review)</span>
+          <input type="checkbox" id="wa-attention" />
+        </label>
+
+        <div class="wa-field" id="wa-phone-wrap">
+          <label for="wa-phone">Your WhatsApp Number (with country code)</label>
+          <input type="text" id="wa-phone" class="wa-input" placeholder="+1 555 123 4567 or +30 69..." autocomplete="off" />
+        </div>
+
+        <!-- CallMeBot fields -->
+        <div id="wa-pane-callmebot" class="wa-provider-pane">
+          <div class="wa-field">
+            <label for="wa-callmebot-key">CallMeBot API Key</label>
+            <input type="password" id="wa-callmebot-key" class="wa-input" placeholder="e.g. 123456" autocomplete="off" />
+          </div>
+          <div class="wa-hint">
+            <strong>1-min free setup:</strong> Send <code>I allow callmebot to send me messages</code> on WhatsApp to <strong>+34 644 71 81 99</strong>, then paste the key it replies with.
+          </div>
+        </div>
+
+        <!-- Twilio fields -->
+        <div id="wa-pane-twilio" class="wa-provider-pane hidden">
+          <div class="wa-field">
+            <label for="wa-twilio-sid">Twilio Account SID</label>
+            <input type="text" id="wa-twilio-sid" class="wa-input" placeholder="ACxxxxxxxxxxxxxxxx" autocomplete="off" />
+          </div>
+          <div class="wa-field">
+            <label for="wa-twilio-token">Twilio Auth Token</label>
+            <input type="password" id="wa-twilio-token" class="wa-input" placeholder="Auth token" autocomplete="off" />
+          </div>
+          <div class="wa-field">
+            <label for="wa-twilio-from">Twilio WhatsApp Sender</label>
+            <input type="text" id="wa-twilio-from" class="wa-input" value="whatsapp:+14155238886" autocomplete="off" />
+          </div>
+          <div class="wa-hint">
+            Two-way replies: point Twilio's incoming webhook to <code>POST /api/webhooks/whatsapp</code> to reply <code>1</code> (Approve), <code>2</code> (Deny), or instructions directly in WhatsApp.
+          </div>
+        </div>
+
+        <!-- Meta Cloud API fields -->
+        <div id="wa-pane-cloud_api" class="wa-provider-pane hidden">
+          <div class="wa-field">
+            <label for="wa-cloud-phone-id">Phone Number ID</label>
+            <input type="text" id="wa-cloud-phone-id" class="wa-input" placeholder="105928374..." autocomplete="off" />
+          </div>
+          <div class="wa-field">
+            <label for="wa-cloud-token">Permanent / Access Token</label>
+            <input type="password" id="wa-cloud-token" class="wa-input" placeholder="EAAG..." autocomplete="off" />
+          </div>
+        </div>
+
+        <!-- Custom Webhook fields -->
+        <div id="wa-pane-webhook" class="wa-provider-pane hidden">
+          <div class="wa-field">
+            <label for="wa-webhook-url">Webhook URL (WAHA, Baileys, n8n, OpenClaw)</label>
+            <input type="text" id="wa-webhook-url" class="wa-input" placeholder="https://..." autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="wa-actions">
+          <button type="button" id="btn-wa-test" class="btn-decision">Send Test</button>
+          <button type="submit" class="btn-decision primary">Save Settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/app.js?v=5" type="module"></script>
 </body>
 </html>

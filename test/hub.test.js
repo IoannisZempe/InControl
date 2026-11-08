@@ -95,3 +95,31 @@ test('antigravity hook: PreInvocation injects queued panel message & Stop contin
     await hub.close();
   }
 });
+
+test('whatsapp: incoming webhook reply resolves waiting agent', async () => {
+  const hub = await createInControlHub({ port: 4796, macNotifications: false, token: 't', autoWatch: false });
+  const base = 'http://localhost:4796';
+  try {
+    const askPromise = fetch(`${base}/api/agents/ask`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'wa-agent', name: 'Claude', question: 'Deploy to prod?', wait: true }),
+    }).then((r) => r.json());
+
+    await new Promise((r) => setTimeout(r, 80));
+
+    // Simulate incoming Twilio WhatsApp reply "1" (Approve)
+    const whRes = await fetch(`${base}/api/webhooks/whatsapp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'From=whatsapp%3A%2B15551234567&Body=1',
+    });
+    assert.equal(whRes.status, 200);
+
+    const decision = await askPromise;
+    assert.equal(decision.action, 'approve');
+    assert.equal(decision.sourceDevice, 'WhatsApp');
+  } finally {
+    await hub.close();
+  }
+});

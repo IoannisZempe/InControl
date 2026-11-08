@@ -13,6 +13,14 @@ import {
   installIntegration,
 } from '../connectors/auto-watcher.js';
 import {
+  setupWhatsAppEscalation,
+  getPublicWhatsAppStatus,
+  loadWhatsAppConfig,
+  saveWhatsAppConfig,
+  dispatchWhatsAppMessage,
+  handleIncomingWhatsAppReply,
+} from './whatsapp.js';
+import {
   loadOrCreateToken,
   checkOrigin,
   isAuthorized,
@@ -89,6 +97,10 @@ export async function createInControlHub(options = {}) {
   network.tailscalePairingUrl = network.tailscaleUrl
     ? `${network.tailscaleUrl}/?token=${encodeURIComponent(token)}`
     : null;
+  const stopWhatsApp = setupWhatsAppEscalation(
+    store,
+    () => network.tailscalePairingUrl || network.pairingUrl
+  );
   const allowedHosts = buildAllowedHosts(network, options.allowedHosts || []);
   // The QR code carries the pairing token so scanning it pairs the device in one step.
   const qrSvg = await QRCode.toString(network.pairingUrl, {
@@ -245,6 +257,47 @@ export async function createInControlHub(options = {}) {
         });
       }
 
+      // 10. GET/POST /api/whatsapp — Configure unanswered-prompt WhatsApp escalation
+      if (req.method === 'GET' && pathname === '/api/whatsapp') {
+        return sendJson(res, 200, { ok: true, whatsapp: getPublicWhatsAppStatus() });
+      }
+
+      if (req.method === 'POST' && pathname === '/api/whatsapp') {
+        const body = await readJsonBody(req);
+        const patch = { ...body };
+        for (const secretKey of ['callmebotApiKey', 'twilioToken', 'cloudToken']) {
+          if (patch[secretKey] === '••••••••' || patch[secretKey] === undefined) {
+            delete patch[secretKey];
+          }
+        }
+        saveWhatsAppConfig(patch);
+        broadcast({
+          type: 'state_sync',
+          state: buildFullState(store, network, qrSvg),
+        });
+        return sendJson(res, 200, {
+          ok: true,
+          message: 'Saved WhatsApp escalation settings',
+          whatsapp: getPublicWhatsAppStatus(),
+        });
+      }
+
+      if (req.method === 'POST' && pathname === '/api/whatsapp/test') {
+        const cfg = loadWhatsAppConfig();
+        const link = network.tailscalePairingUrl || network.pairingUrl;
+        await dispatchWhatsAppMessage(
+          cfg,
+          `✅ *InControl WhatsApp Escalation Active*\nIf you don't respond within ${cfg.timeoutSec}s when an agent needs input, InControl will message you here.\n\nOpen panel: ${link}`
+        );
+        return sendJson(res, 200, { ok: true, message: `Sent test WhatsApp to ${cfg.phone || cfg.provider}` });
+      }
+
+      if (req.method === 'POST' && pathname === '/api/webhooks/whatsapp') {
+        const body = await readJsonOrFormBody(req);
+        const result = handleIncomingWhatsAppReply(store, body);
+        return sendJson(res, result.ok ? 200 : 400, result);
+      }
+
       // 10. Static file serving (Web UI / PWA)
       let filePath = pathname === '/' ? path.join(PUBLIC_DIR, 'index.html') : path.join(PUBLIC_DIR, pathname);
       // Prevent directory traversal
@@ -351,6 +404,7 @@ export async function createInControlHub(options = {}) {
     close: () =>
       new Promise((resolve) => {
         stopAutoWatcher();
+        stopWhatsApp();
         wss.close();
         server.close(() => resolve());
       }),
@@ -362,6 +416,7 @@ function buildFullState(store, network, qrSvg) {
     agents: store.getSortedAgents(),
     counts: store.getSummaryCounts(),
     integrations: getIntegrationsStatus(),
+    whatsapp: getPublicWhatsAppStatus(),
     network,
     qrSvg,
     globalEvents: store.globalEvents.slice(0, 25),
@@ -389,6 +444,29 @@ function readJsonBody(req) {
         resolve(JSON.parse(raw));
       } catch (err) {
         reject(new Error('Invalid JSON payload'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function readJsonOrFormBody(req) {
+  return new Promise((resolve, reject) => {
+    let raw = '';
+    req.on('data', (chunk) => {
+      raw += chunk;
+      if (raw.length > 2_000_000) reject(new Error('Payload too large'));
+    });
+    req.on('end', () => {
+      if (!raw.trim()) return resolve({});
+      const ct = (req.headers['content-type'] || '').toLowerCase();
+      if (ct.includes('application/x-www-form-urlencoded')) {
+        return resolve(Object.fromEntries(new URLSearchParams(raw).entries()));
+      }
+      try {
+        resolve(JSON.parse(raw));
+      } catch {
+        resolve(Object.fromEntries(new URLSearchParams(raw).entries()));
       }
     });
     req.on('error', reject);
