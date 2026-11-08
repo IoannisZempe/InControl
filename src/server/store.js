@@ -226,21 +226,20 @@ export class AgentStore extends EventEmitter {
       }
     }
 
-    // 2. If a live stdin handler is registered (e.g. CLI wrapper or simulator), invoke it
+    // 2. If a live stdin handler is registered (e.g. CLI wrapper, Codex queue, or simulator), invoke it
     const stdinHandler = this.stdinHandlers.get(agentId);
     if (stdinHandler) {
       stdinHandler({ action, text, requestId, sourceDevice });
-    } else {
-      // Queue for polling/MCP agents
-      agent.queuedMessages.push({
-        id: `msg_${crypto.randomUUID().slice(0, 8)}`,
-        action,
-        text,
-        requestId,
-        sourceDevice,
-        timestamp: now,
-      });
     }
+    // Always also queue for polling/hook/MCP agents
+    agent.queuedMessages.push({
+      id: `msg_${crypto.randomUUID().slice(0, 8)}`,
+      action,
+      text,
+      requestId,
+      sourceDevice,
+      timestamp: now,
+    });
 
     this.emit('change', { type: 'agent_responded', agent: this.serializeAgent(agent) });
     return { ok: true, agent: this.serializeAgent(agent) };

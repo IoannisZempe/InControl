@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -253,11 +254,14 @@ function scanCodexAndChatGptSessions(store, seenMtimes) {
     if (seenMtimes.get(key) === maxMtime && store.agents.has(agentId)) continue;
     seenMtimes.set(key, maxMtime);
 
-    // Find thread title from main thread ID or parent_thread_id
+    // Find primary thread ID and title from main thread ID or parent_thread_id
+    let primaryThreadId = meta.parent_thread_id || meta.session_id || meta.id || null;
     let threadTitle = null;
     for (const item of items) {
       const tid = item.meta.parent_thread_id || item.meta.session_id || item.meta.id;
+      if (tid && !primaryThreadId) primaryThreadId = tid;
       if (tid && threadNames.has(tid)) {
+        primaryThreadId = tid;
         threadTitle = threadNames.get(tid);
         break;
       }
@@ -401,6 +405,14 @@ function scanCodexAndChatGptSessions(store, seenMtimes) {
       attentionReason: best.attentionReason,
       pendingPrompt: best.pendingPrompt,
     });
+
+    if (primaryThreadId) {
+      store.registerInputHandler(agentId, ({ action, text }) => {
+        if ((action === 'reply' || action === 'steer') && text?.trim()) {
+          queueCodexThreadMessage(primaryThreadId, text.trim(), cwd, store, agentId);
+        }
+      });
+    }
   }
 
   // Remove any legacy duplicate codex-* entries that aren't in activeIds
@@ -447,13 +459,13 @@ export function getIntegrationsStatus() {
     {
       id: 'codex_chatgpt',
       name: 'Codex + ChatGPT App',
-      subtitle: 'Auto-watches ~/.codex sessions (ChatGPT.app & Codex CLI) + MCP server',
+      subtitle: 'Auto-watches ~/.codex sessions + queues messages via codex queue & MCP',
       detected: codexDetected,
       autoWatched: codexDetected,
       configured: codexMcpInstalled,
       actionLabel: codexMcpInstalled ? 'Reinstall MCP' : 'Enable Two-Way MCP',
       statusText: codexMcpInstalled
-        ? 'Live Watcher + MCP Active'
+        ? 'Live Queue + MCP Active'
         : codexDetected
         ? 'Live Watcher Active'
         : 'Not detected',
@@ -614,4 +626,39 @@ function findRecentJsonlFiles(dir, limit = 4) {
   walk(dir, 0);
   results.sort((a, b) => b.mtimeMs - a.mtimeMs);
   return results.slice(0, limit);
+}
+
+function resolveCodexBin() {
+  const candidates = [
+    path.join(HOME, '.local', 'bin', 'codex'),
+    '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex',
+    '/opt/homebrew/bin/codex',
+    '/usr/local/bin/codex',
+  ];
+  for (const bin of candidates) {
+    if (fs.existsSync(bin)) return bin;
+  }
+  return 'codex';
+}
+
+function queueCodexThreadMessage(threadId, text, cwd, store, agentId) {
+  const bin = resolveCodexBin();
+  const child = spawn(bin, ['queue', '--thread', threadId, '--message', text], {
+    cwd: fs.existsSync(cwd) ? cwd : HOME,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stderr = '';
+  child.stderr.on('data', (d) => {
+    stderr += d.toString();
+  });
+  child.on('close', (code) => {
+    const agent = store.agents.get(agentId);
+    if (!agent) return;
+    if (code === 0) {
+      agent.currentStep = `Queued in ChatGPT/Codex: "${text.slice(0, 48)}"`;
+    } else if (stderr.trim()) {
+      agent.currentStep = `Queued for MCP inbox: "${text.slice(0, 48)}"`;
+    }
+    store.emit('change', { type: 'agent_updated', agent: store.serializeAgent(agent) });
+  });
 }

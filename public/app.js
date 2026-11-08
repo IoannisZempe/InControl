@@ -234,6 +234,12 @@ function renderCard(a) {
         <button type="submit" class="reply-submit">Send</button>
         <button type="button" class="btn-decision danger" data-act="respond" data-agent="${esc(a.id)}" data-action="stop" title="Stop agent before next model call">Stop</button>
       </form>`;
+  } else if (a.status === 'idle') {
+    decisionHtml = `
+      <form class="reply-form" data-act="reply-form" data-agent="${esc(a.id)}">
+        <input class="reply-input" data-reply-for="${esc(a.id)}" placeholder="Queue message or instruction…" value="${esc(draftReplies.get(a.id) || '')}" autocomplete="off" />
+        <button type="submit" class="reply-submit">Send</button>
+      </form>`;
   }
 
   const logHtml =
