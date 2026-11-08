@@ -3,13 +3,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getClaudeSettingsSnippet } from './claude-hook.js';
+import { getAgyHooksConfig } from './agy-hook.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BIN_PATH = path.resolve(__dirname, '../../bin/incontrol.js');
 
 const HOME = os.homedir();
 const AGY_BRAIN_DIR = path.join(HOME, '.gemini', 'antigravity', 'brain');
-const AGY_MCP_CONFIG = path.join(HOME, '.gemini', 'antigravity', 'mcp_config.json');
+const AGY_CONFIG_DIR = path.join(HOME, '.gemini', 'config');
+const AGY_HOOKS_CONFIG = path.join(AGY_CONFIG_DIR, 'hooks.json');
+const AGY_MCP_CONFIG = path.join(AGY_CONFIG_DIR, 'mcp_config.json');
 const CODEX_DIR = path.join(HOME, '.codex');
 const CODEX_INDEX = path.join(CODEX_DIR, 'session_index.jsonl');
 const CODEX_SESSIONS_DIR = path.join(CODEX_DIR, 'sessions');
@@ -321,7 +324,9 @@ function scanCodexAndChatGptSessions(store, seenMtimes) {
  */
 export function getIntegrationsStatus() {
   const agyDetected = fs.existsSync(AGY_BRAIN_DIR);
+  const agyHooksInstalled = fileContains(AGY_HOOKS_CONFIG, 'incontrol');
   const agyMcpInstalled = fileContains(AGY_MCP_CONFIG, 'incontrol');
+  const agyFullyConfigured = agyHooksInstalled && agyMcpInstalled;
 
   const codexDetected = fs.existsSync(CODEX_DIR);
   const codexMcpInstalled = fileContains(CODEX_CONFIG_TOML, 'mcp_servers.incontrol');
@@ -336,13 +341,13 @@ export function getIntegrationsStatus() {
     {
       id: 'antigravity',
       name: 'Antigravity',
-      subtitle: 'Auto-watches live transcripts + MCP tools for two-way prompts',
+      subtitle: 'Lifecycle hooks (~/.gemini/config/hooks.json) + MCP + live transcript watcher',
       detected: agyDetected,
       autoWatched: agyDetected,
-      configured: agyMcpInstalled,
-      actionLabel: agyMcpInstalled ? 'Reinstall MCP' : 'Enable Two-Way MCP',
-      statusText: agyMcpInstalled
-        ? 'Live Watcher + MCP Active'
+      configured: agyFullyConfigured,
+      actionLabel: agyFullyConfigured ? 'Reinstall Hooks & MCP' : 'Enable Two-Way Control',
+      statusText: agyFullyConfigured
+        ? 'Hooks + MCP + Watcher Active'
         : agyDetected
         ? 'Live Watcher Active'
         : 'Not detected',
@@ -390,7 +395,20 @@ export function getIntegrationsStatus() {
 export function installIntegration(targetId) {
   if (targetId === 'antigravity') {
     upsertJsonMcpConfig(AGY_MCP_CONFIG, 'Antigravity');
-    return { ok: true, message: 'Installed InControl MCP into ~/.gemini/antigravity/mcp_config.json' };
+    const agyHooks = getAgyHooksConfig(`node ${BIN_PATH}`);
+    let existingHooks = {};
+    if (fs.existsSync(AGY_HOOKS_CONFIG)) {
+      try {
+        existingHooks = JSON.parse(fs.readFileSync(AGY_HOOKS_CONFIG, 'utf8'));
+      } catch {}
+    }
+    Object.assign(existingHooks, agyHooks);
+    fs.mkdirSync(AGY_CONFIG_DIR, { recursive: true });
+    fs.writeFileSync(AGY_HOOKS_CONFIG, JSON.stringify(existingHooks, null, 2));
+    return {
+      ok: true,
+      message: 'Installed Antigravity hooks.json & mcp_config.json into ~/.gemini/config/',
+    };
   }
 
   if (targetId === 'codex_chatgpt') {

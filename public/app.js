@@ -224,8 +224,15 @@ function renderCard(a) {
         <button class="mini-icon-btn" data-act="respond" data-agent="${esc(a.id)}" data-action="dismiss">Dismiss</button>
       </div>
       <form class="reply-form" data-act="reply-form" data-agent="${esc(a.id)}">
-        <input class="reply-input" data-reply-for="${esc(a.id)}" placeholder="Send follow-up…" value="${esc(draftReplies.get(a.id) || '')}" autocomplete="off" />
+        <input class="reply-input" data-reply-for="${esc(a.id)}" placeholder="Send follow-up instruction…" value="${esc(draftReplies.get(a.id) || '')}" autocomplete="off" />
         <button type="submit" class="reply-submit">Send</button>
+      </form>`;
+  } else if (a.status === 'working') {
+    decisionHtml = `
+      <form class="reply-form" data-act="reply-form" data-agent="${esc(a.id)}">
+        <input class="reply-input" data-reply-for="${esc(a.id)}" placeholder="Steer agent (queued for next step)…" value="${esc(draftReplies.get(a.id) || '')}" autocomplete="off" />
+        <button type="submit" class="reply-submit">Send</button>
+        <button type="button" class="btn-decision danger" data-act="respond" data-agent="${esc(a.id)}" data-action="stop" title="Stop agent before next model call">Stop</button>
       </form>`;
   }
 

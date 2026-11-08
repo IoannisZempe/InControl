@@ -71,12 +71,16 @@ Keep this secret — anyone with it can answer your agents.`);
 
     case 'hook': {
       const target = args[0];
-      if (target !== 'claude') {
-        console.error('Usage: incontrol hook claude <EventName> [--gate-bash]');
+      if (target === 'claude') {
+        const { runClaudeHook } = await import('../src/connectors/claude-hook.js');
+        await runClaudeHook(args.slice(1));
+      } else if (target === 'agy' || target === 'antigravity') {
+        const { runAgyHook } = await import('../src/connectors/agy-hook.js');
+        await runAgyHook(args.slice(1));
+      } else {
+        console.error('Usage: incontrol hook <claude|agy> <EventName> [--gate]');
         process.exit(1);
       }
-      const { runClaudeHook } = await import('../src/connectors/claude-hook.js');
-      await runClaudeHook(args.slice(1));
       break;
     }
 

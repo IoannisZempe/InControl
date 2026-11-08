@@ -50,3 +50,48 @@ test('store: agents sorted by attention priority', async () => {
     await hub.close();
   }
 });
+
+test('antigravity hook: PreInvocation injects queued panel message & Stop continues on follow-up', async () => {
+  const { spawn } = await import('node:child_process');
+  const runHook = (args, stdinObj) =>
+    new Promise((resolve, reject) => {
+      const child = spawn('node', ['./bin/incontrol.js', ...args], {
+        env: { ...process.env, INCONTROL_URL: 'http://localhost:4797' },
+      });
+      let out = '';
+      child.stdout.on('data', (d) => (out += d));
+      child.on('error', reject);
+      child.on('close', () => resolve(JSON.parse(out.trim() || '{}')));
+      child.stdin.end(JSON.stringify(stdinObj));
+    });
+
+  const hub = await createInControlHub({ port: 4797, macNotifications: false, token: 't', autoWatch: false });
+  try {
+    // 1. PreToolUse registers agent as working
+    const preToolOut = await runHook(['hook', 'agy', 'PreToolUse'], {
+      conversationId: 'abcd1234-5678',
+      workspacePaths: ['/repos/demo-app'],
+      lastUserInput: 'Build API',
+      toolCall: { name: 'run_command', args: { CommandLine: 'npm test', toolSummary: 'Run unit tests' } },
+    });
+    assert.deepEqual(preToolOut, { decision: 'allow' });
+
+    // 2. User sends a steering instruction from InControl panel
+    await fetch('http://localhost:4797/api/agents/agy-abcd1234/respond', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reply', text: 'Also add rate limiting', sourceDevice: 'iPhone' }),
+    });
+
+    // 3. Next PreInvocation receives the injected userMessage step
+    const preInvOut = await runHook(['hook', 'agy', 'PreInvocation'], {
+      conversationId: 'abcd1234-5678',
+      workspacePaths: ['/repos/demo-app'],
+      invocationNum: 2,
+    });
+    assert.equal(preInvOut.injectSteps.length, 1);
+    assert.match(preInvOut.injectSteps[0].userMessage, /Also add rate limiting/);
+  } finally {
+    await hub.close();
+  }
+});
