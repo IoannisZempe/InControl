@@ -16,12 +16,20 @@ export class InControlAgent {
     this.ide = config.ide || 'Custom Runtime';
     this.workspace = config.workspace || process.cwd();
     this.branch = config.branch || 'main';
+    // Only needed when the agent runs on a different machine than the hub (`incontrol token`).
+    this.token = config.token || process.env.INCONTROL_TOKEN || null;
+  }
+
+  _headers() {
+    const h = { 'Content-Type': 'application/json' };
+    if (this.token) h.Authorization = `Bearer ${this.token}`;
+    return h;
   }
 
   async report({ status = 'working', currentTask, currentStep, attentionReason } = {}) {
     const res = await fetch(`${this.hubUrl}/api/agents/event`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this._headers(),
       body: JSON.stringify({
         id: this.id,
         name: this.name,
@@ -68,7 +76,7 @@ export class InControlAgent {
 
     const res = await fetch(`${this.hubUrl}/api/agents/ask`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this._headers(),
       body: JSON.stringify({
         id: this.id,
         name: this.name,

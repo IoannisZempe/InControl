@@ -6,6 +6,10 @@
 
 **One always-on side panel for all your AI agents.** See which agents need your input, which need your attention, and which are fine. Works across IDEs and terminals, and shows up on your Mac, phone, and any browser.
 
+<p align="center">
+  <img src="docs/screenshot.png" alt="InControl Side Panel Screenshot" width="380" />
+</p>
+
 ```
 🔴 Needs input      Claude Code · payments-service   "Allow prisma migrate?"  [Approve] [Deny] [reply…]
 🟠 Needs attention  Codex CLI · cloud-infra           "Done: terraform plan is ready for review"
@@ -91,14 +95,18 @@ Or call the HTTP API directly:
  └──────────────────────┘                      └─────────────────────────────┘
 ```
 
-## Security
+## Security & Device Pairing
 
-The hub listens on `0.0.0.0` so your phone can reach it. **It has no authentication yet**, so use it only on trusted networks. Tailscale is the recommended way to reach it remotely. Pairing tokens are on the roadmap.
+- **Pairing-Token Auth for Phones & Remote Devices:** On first start, InControl generates a 192-bit cryptographic pairing token stored in `~/.incontrol/config.json` (`0600`).
+- **One-Scan QR Pairing:** Scanning the 📱 QR code in the panel opens `http://<lan-ip>:4747/?token=...`, which exchanges the token for a long-lived `HttpOnly; SameSite=Strict` session cookie and strips the token from the URL.
+- **Zero-Config Local Connectors:** Local agents and the macOS panel on `127.0.0.1` connect seamlessly without extra setup (or pass `--strict` to require the token on localhost too, or `--local-only` to disable LAN binding altogether).
+- **Cross-Site & DNS Rebinding Protection:** The hub enforces strict `Host` allowlisting and `Origin` checks so external websites cannot talk to your local hub.
+- Rotate your token anytime with `incontrol token --rotate`.
 
 ## Roadmap
 
-- [ ] Pairing token / QR auth for remote devices
-- [ ] Web Push notifications for the PWA when it's in the background
+- [x] Pairing token / QR auth for remote devices (#1)
+- [ ] Web Push notifications for the PWA when it's in the background (#5)
 - [ ] VS Code / JetBrains extension (status bar + webview)
 - [ ] Persistent history (SQLite)
 - [ ] Optional end-to-end encrypted relay for access outside your network

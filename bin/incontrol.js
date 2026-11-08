@@ -25,6 +25,8 @@ async function main() {
         port: flag('--port'),
         demo: args.includes('--demo'),
         macNotifications: !args.includes('--no-notify'),
+        localOnly: args.includes('--local-only'),
+        strict: args.includes('--strict'),
       });
       const n = hub.network;
       console.log(`
@@ -32,10 +34,12 @@ async function main() {
   │  InControl hub running                        │
   ╰───────────────────────────────────────────────╯
   Local:      ${n.localUrl}
-  Phone/LAN:  ${n.lanUrl || '(no LAN interface found)'}
+  Phone/LAN:  ${args.includes('--local-only') ? '(disabled: --local-only)' : n.lanUrl || '(no LAN interface found)'}
   Tailscale:  ${n.tailscaleUrl || '(not detected)'}
   Demo:       ${hub.simulator.active ? 'on' : 'off'}
+  Auth:       pairing token required for other devices${args.includes('--strict') ? ' (and localhost: --strict)' : ''}
 
+  Pair a phone: tap 📱 in the panel and scan the QR code, or run \`incontrol token\`
   Open the native macOS side panel:  incontrol panel
 `);
       if (args.includes('--panel')) launchPanel(n.localUrl);
@@ -45,6 +49,20 @@ async function main() {
       };
       process.on('SIGINT', shutdown);
       process.on('SIGTERM', shutdown);
+      break;
+    }
+
+    case 'token': {
+      const { loadOrCreateToken } = await import('../src/server/auth.js');
+      const { discoverNetworkUrls } = await import('../src/server/hub.js');
+      const rotate = args.includes('--rotate');
+      const token = loadOrCreateToken({ rotate });
+      const n = discoverNetworkUrls(Number(flag('--port') || 4747));
+      console.log(`${rotate ? '✓ Token rotated. Restart the hub; paired devices must re-pair.\n\n' : ''}Token:        ${token}
+Pairing link: ${n.primaryProjectionUrl}/?token=${token}${n.tailscaleUrl ? `\nTailscale:    ${n.tailscaleUrl}/?token=${token}` : ''}
+
+Remote agents: export INCONTROL_URL=${n.primaryProjectionUrl} INCONTROL_TOKEN=${token}
+Keep this secret — anyone with it can answer your agents.`);
       break;
     }
 
@@ -123,6 +141,9 @@ async function main() {
 
 Usage:
   incontrol start [--port 4747] [--demo] [--panel] [--no-notify]   Start the hub + web UI
+        [--local-only]   bind to 127.0.0.1 (no phone access)
+        [--strict]       require the token even from localhost
+  incontrol token [--rotate]                                       Show / rotate the device pairing token
   incontrol panel                                                  Open the native macOS side panel
   incontrol setup claude-code [--install]                          Connect Claude Code via hooks
   incontrol setup mcp [--ide Cursor]                               Print MCP config for IDE agents

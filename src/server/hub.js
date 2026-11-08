@@ -8,6 +8,18 @@ import QRCode from 'qrcode';
 import { AgentStore } from './store.js';
 import { AgentSimulator } from './simulator.js';
 import { focusAgentWindow, sendMacNotification } from './macos-focus.js';
+import {
+  loadOrCreateToken,
+  checkOrigin,
+  isAuthorized,
+  safeEqual,
+  buildAllowedHosts,
+  sessionCookie,
+  UNAUTHORIZED_HTML,
+} from './auth.js';
+
+// Static files that may be served before pairing (no secrets in them).
+const PUBLIC_ASSETS = new Set(['/manifest.json', '/styles.css', '/app.js']);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,8 +72,10 @@ export function discoverNetworkUrls(port) {
 
 export async function createInControlHub(options = {}) {
   const port = Number(options.port || process.env.INCONTROL_PORT || 4747);
-  const host = options.host || '0.0.0.0';
+  const host = options.host || (options.localOnly ? '127.0.0.1' : '0.0.0.0');
   const enableMacNotifications = options.macNotifications !== false;
+  const token = options.token || loadOrCreateToken();
+  const requireLocal = Boolean(options.strict);
 
   const store = new AgentStore();
   const simulator = new AgentSimulator(store);
@@ -71,7 +85,13 @@ export async function createInControlHub(options = {}) {
   }
 
   const network = discoverNetworkUrls(port);
-  const qrSvg = await QRCode.toString(network.primaryProjectionUrl, {
+  network.pairingUrl = `${network.primaryProjectionUrl}/?token=${encodeURIComponent(token)}`;
+  network.tailscalePairingUrl = network.tailscaleUrl
+    ? `${network.tailscaleUrl}/?token=${encodeURIComponent(token)}`
+    : null;
+  const allowedHosts = buildAllowedHosts(network, options.allowedHosts || []);
+  // The QR code carries the pairing token so scanning it pairs the device in one step.
+  const qrSvg = await QRCode.toString(network.pairingUrl, {
     type: 'svg',
     margin: 1,
     color: {
@@ -81,10 +101,15 @@ export async function createInControlHub(options = {}) {
   });
 
   const server = http.createServer(async (req, res) => {
-    // CORS headers so custom agents or external webviews can connect freely
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    // No CORS headers on purpose: only same-origin pages (our own UI) may call the API from a browser.
+    // Agents/connectors are non-browser clients and are unaffected.
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+
+    const originCheck = checkOrigin(req, allowedHosts);
+    if (!originCheck.ok) {
+      return sendJson(res, 403, { ok: false, error: originCheck.reason });
+    }
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204);
@@ -94,6 +119,25 @@ export async function createInControlHub(options = {}) {
 
     const parsedUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
     const pathname = parsedUrl.pathname;
+
+    // Pairing: a valid ?token= sets a long-lived HttpOnly cookie, then redirects to strip it from the URL.
+    const queryToken = parsedUrl.searchParams.get('token');
+    if (req.method === 'GET' && queryToken && !pathname.startsWith('/api/')) {
+      if (safeEqual(queryToken, token)) {
+        res.writeHead(302, { 'Set-Cookie': sessionCookie(token), Location: '/' });
+        res.end();
+        return;
+      }
+    }
+
+    if (!PUBLIC_ASSETS.has(pathname) && !isAuthorized(req, parsedUrl, token, { requireLocal })) {
+      if (pathname.startsWith('/api/')) {
+        return sendJson(res, 401, { ok: false, error: 'Unauthorized: pairing token required' });
+      }
+      res.writeHead(401, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(UNAUTHORIZED_HTML);
+      return;
+    }
 
     try {
       // 1. GET /api/state — Full state snapshot
@@ -239,7 +283,16 @@ export async function createInControlHub(options = {}) {
   });
 
   // WebSocket server for instant cross-device state projection
-  const wss = new WebSocketServer({ server, path: '/ws' });
+  const wss = new WebSocketServer({
+    server,
+    path: '/ws',
+    verifyClient: ({ req }, done) => {
+      const url = new URL(req.url || '/ws', 'http://localhost');
+      if (!checkOrigin(req, allowedHosts).ok) return done(false, 403, 'Forbidden');
+      if (!isAuthorized(req, url, token, { requireLocal })) return done(false, 401, 'Unauthorized');
+      done(true);
+    },
+  });
 
   function broadcast(payload) {
     const data = JSON.stringify(payload);
@@ -309,6 +362,7 @@ export async function createInControlHub(options = {}) {
     simulator,
     network,
     port,
+    token,
     close: () =>
       new Promise((resolve) => {
         simulator.stop();

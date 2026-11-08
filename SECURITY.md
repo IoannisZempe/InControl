@@ -1,15 +1,22 @@
 # Security Policy
 
-## Current security model
+## Security Model
 
-The InControl hub listens on `0.0.0.0:4747` so that phones and other devices on your network can reach it. **v0.x has no authentication.** Anyone who can reach that port can see your agents' status and send them replies, including approving tool calls. Until pairing-token auth lands:
+InControl is a local-first control plane for your AI coding agents:
 
-- Run the hub only on networks you trust, or bind it to a private overlay network such as Tailscale.
-- Do not expose port 4747 to the public internet or port-forward it.
-- Be careful with `--gate-bash`: approving from the panel lets the command run.
+1. **Pairing-Token Authentication (`~/.incontrol/config.json`)**
+   - On first start, a 192-bit random pairing token is generated and saved with `0600` permissions in `~/.incontrol/config.json` (or overridden via `INCONTROL_TOKEN`).
+   - All non-loopback requests (e.g. from your phone or another laptop over LAN/Tailscale) must present this token via the QR pairing URL (`/?token=...`), `Authorization: Bearer <token>`, or the `HttpOnly; SameSite=Strict` session cookie set during pairing.
+   - Run `incontrol token --rotate` at any time to invalidate existing paired devices.
+2. **Localhost Modes**
+   - By default, loopback (`127.0.0.1` / `::1`) connections are trusted so local IDE hooks and CLI wrappers work out of the box.
+   - On shared machines, pass `--strict` (`incontrol start --strict`) to require the pairing token on localhost as well.
+   - If you only use the Mac panel and don't want LAN access, pass `--local-only` (`incontrol start --local-only`) to bind strictly to `127.0.0.1`.
+3. **Browser Origin & DNS Rebinding Protection**
+   - Cross-origin requests from third-party websites are rejected (`403 Forbidden`), and `Host` headers are validated against known local/LAN/Tailscale addresses.
 
-## Reporting a vulnerability
+## Reporting a Vulnerability
 
-Please **do not open a public issue.** Report it privately here: https://github.com/IoannisZempe/InControl/security/advisories/new
+Please **do not open a public issue.** Report security vulnerabilities privately via [GitHub Security Advisories](https://github.com/IoannisZempe/InControl/security/advisories/new).
 
 We aim to acknowledge reports within 72 hours.

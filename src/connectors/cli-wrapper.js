@@ -1,3 +1,4 @@
+import { hubHeaders } from './http.js';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import WebSocket from 'ws';
@@ -67,7 +68,7 @@ export async function runCliWrapper(args = []) {
 
   // Connect WebSocket to receive instant remote replies from Phone or Side Panel
   const wsUrl = hubUrl.replace(/^http/, 'ws') + '/ws';
-  const ws = new WebSocket(wsUrl);
+  const ws = new WebSocket(wsUrl, { headers: hubHeaders(false) });
   ws.on('message', (raw) => {
     try {
       const msg = JSON.parse(String(raw));
@@ -85,7 +86,7 @@ export async function runCliWrapper(args = []) {
   // Poll queued messages for this wrapped CLI agent
   const pollTimer = setInterval(async () => {
     try {
-      const res = await fetch(`${hubUrl}/api/agents/${encodeURIComponent(agentId)}/messages`);
+      const res = await fetch(`${hubUrl}/api/agents/${encodeURIComponent(agentId)}/messages`, { headers: hubHeaders(false) });
       const data = await res.json();
       if (Array.isArray(data.messages)) {
         for (const msg of data.messages) {
@@ -115,7 +116,7 @@ export async function runCliWrapper(args = []) {
     if (isPrompt) {
       fetch(`${hubUrl}/api/agents/ask`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: hubHeaders(),
         body: JSON.stringify({
           id: agentId,
           name,
@@ -185,7 +186,7 @@ async function reportEvent(hubUrl, payload) {
   try {
     await fetch(`${hubUrl}/api/agents/event`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: hubHeaders(),
       body: JSON.stringify(payload),
     });
   } catch {}

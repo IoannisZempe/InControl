@@ -25,8 +25,11 @@ class InControlAgent:
         workspace: Optional[str] = None,
         branch: str = "main",
         hub_url: Optional[str] = None,
+        token: Optional[str] = None,
     ):
         self.hub_url = (hub_url or os.environ.get("INCONTROL_URL", "http://localhost:4747")).rstrip("/")
+        # Only needed when the agent runs on a different machine than the hub (`incontrol token`).
+        self.token = token or os.environ.get("INCONTROL_TOKEN")
         self.name = name
         self.id = agent_id or f"python-{name.lower().replace(' ', '-')}"
         self.ide = ide
@@ -35,10 +38,13 @@ class InControlAgent:
 
     def _post(self, path: str, payload: Dict[str, Any], timeout: int = 310) -> Dict[str, Any]:
         data = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
         req = urllib.request.Request(
             f"{self.hub_url}{path}",
             data=data,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=timeout) as resp:

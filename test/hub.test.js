@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createInControlHub } from '../src/server/hub.js';
 
 test('hub: register agent, blocking ask resolved by panel reply', async () => {
-  const hub = await createInControlHub({ port: 4799, macNotifications: false });
+  const hub = await createInControlHub({ port: 4799, macNotifications: false, token: 't' });
   const base = 'http://localhost:4799';
   try {
     let res = await fetch(`${base}/api/agents/event`, {
@@ -38,7 +38,7 @@ test('hub: register agent, blocking ask resolved by panel reply', async () => {
 });
 
 test('store: agents sorted by attention priority', async () => {
-  const hub = await createInControlHub({ port: 4798, macNotifications: false, demo: true });
+  const hub = await createInControlHub({ port: 4798, macNotifications: false, demo: true, token: 't' });
   try {
     const statuses = hub.store.getSortedAgents().map((a) => a.status);
     const order = ['needs_input', 'needs_attention', 'working', 'idle'];

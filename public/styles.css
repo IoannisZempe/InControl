@@ -129,12 +129,14 @@ code, pre { font-family: var(--mono); }
 }
 
 .section-label {
+  flex-shrink: 0;
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--dim); padding: 8px 4px 2px;
   display: flex; align-items: center; gap: 6px;
 }
 
 .agent-card {
+  flex-shrink: 0;
   position: relative;
   background: var(--card);
   border: 1px solid var(--card-border);
@@ -142,7 +144,6 @@ code, pre { font-family: var(--mono); }
   padding: 11px 12px 11px 15px;
   overflow: hidden;
   transition: border-color 0.2s, transform 0.2s;
-  animation: slideIn 0.25s ease-out;
 }
 .agent-card::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
@@ -169,7 +170,14 @@ code, pre { font-family: var(--mono); }
 .provider-custom { background: rgba(167, 139, 250, 0.2); color: #c4b5fd; }
 
 .card-titles { min-width: 0; }
-.agent-name { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agent-name { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; display: flex; align-items: center; gap: 6px; }
+.agent-name > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.demo-tag {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 1px 5px; border-radius: 4px;
+  background: rgba(129, 140, 248, 0.16); color: var(--accent);
+  border: 1px solid rgba(129, 140, 248, 0.3); flex-shrink: 0;
+}
 .agent-meta { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agent-meta .branch { font-family: var(--mono); color: var(--dim); }
 

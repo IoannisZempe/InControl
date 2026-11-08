@@ -217,7 +217,7 @@ function renderCard(a) {
         <div class="card-identity">
           <div class="provider-avatar provider-${esc(a.provider)}">${initials}</div>
           <div class="card-titles">
-            <div class="agent-name">${esc(a.name)} · ${esc(a.projectName)}</div>
+            <div class="agent-name"><span>${esc(a.name)} · ${esc(a.projectName)}</span>${a.isSimulated ? '<span class="demo-tag" title="Simulated example agent — click Demo in top bar to hide">Demo</span>' : ''}</div>
             <div class="agent-meta">${esc(a.ide)}${a.branch ? ` · <span class="branch">${esc(a.branch)}</span>` : ''}</div>
           </div>
         </div>
@@ -343,10 +343,10 @@ document.addEventListener('input', (e) => {
 $('#btn-project').addEventListener('click', () => {
   const n = state.network || {};
   $('#qr-container').innerHTML = state.qrSvg || '';
-  $('#url-primary').textContent = n.primaryProjectionUrl || location.origin;
+  $('#url-primary').textContent = n.pairingUrl || n.primaryProjectionUrl || location.origin;
   if (n.tailscaleUrl) {
     $('#tailscale-row').classList.remove('hidden');
-    $('#url-tailscale').textContent = n.tailscaleUrl;
+    $('#url-tailscale').textContent = n.tailscalePairingUrl || n.tailscaleUrl;
   }
   $('#modal-project').classList.remove('hidden');
 });

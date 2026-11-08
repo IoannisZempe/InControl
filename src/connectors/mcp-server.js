@@ -1,3 +1,4 @@
+import { hubHeaders } from './http.js';
 import path from 'node:path';
 import readline from 'node:readline';
 
@@ -46,7 +47,7 @@ export function runMcpServer(args = []) {
         // Auto-register the IDE agent with the InControl Hub on MCP initialization
         fetch(`${hubUrl}/api/agents/event`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: hubHeaders(),
           body: JSON.stringify({
             id: agentId,
             name: agentName,
@@ -145,7 +146,7 @@ export function runMcpServer(args = []) {
         if (toolName === 'incontrol_status') {
           const res = await fetch(`${hubUrl}/api/agents/event`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: hubHeaders(),
             body: JSON.stringify({
               id: agentId,
               name: agentName,
@@ -189,7 +190,7 @@ export function runMcpServer(args = []) {
 
           const res = await fetch(`${hubUrl}/api/agents/ask`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: hubHeaders(),
             body: JSON.stringify({
               id: agentId,
               name: agentName,
@@ -217,7 +218,7 @@ export function runMcpServer(args = []) {
         }
 
         if (toolName === 'incontrol_check_inbox') {
-          const res = await fetch(`${hubUrl}/api/agents/${encodeURIComponent(agentId)}/messages`);
+          const res = await fetch(`${hubUrl}/api/agents/${encodeURIComponent(agentId)}/messages`, { headers: hubHeaders(false) });
           const data = await res.json();
           return sendResponse(id, {
             content: [

@@ -1,3 +1,4 @@
+import { hubHeaders } from './http.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -49,7 +50,7 @@ export async function runClaudeHook(args = []) {
       if (gateBash && toolName === 'Bash' && payload.tool_input?.command) {
         const res = await fetch(`${hubUrl}/api/agents/ask`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: hubHeaders(),
           body: JSON.stringify({
             ...baseAgent,
             wait: true,
@@ -75,7 +76,7 @@ export async function runClaudeHook(args = []) {
 
       await fetch(`${hubUrl}/api/agents/event`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: hubHeaders(),
         body: JSON.stringify({
           ...baseAgent,
           status: 'working',
@@ -89,7 +90,7 @@ export async function runClaudeHook(args = []) {
       const message = payload.message || payload.title || 'Claude Code is waiting for your input in terminal';
       await fetch(`${hubUrl}/api/agents/ask`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: hubHeaders(),
         body: JSON.stringify({
           ...baseAgent,
           wait: false,
@@ -104,7 +105,7 @@ export async function runClaudeHook(args = []) {
     } else if (eventName === 'Stop') {
       await fetch(`${hubUrl}/api/agents/event`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: hubHeaders(),
         body: JSON.stringify({
           ...baseAgent,
           status: 'needs_attention',
@@ -118,7 +119,7 @@ export async function runClaudeHook(args = []) {
       const promptText = payload.prompt || 'Executing user prompt';
       await fetch(`${hubUrl}/api/agents/event`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: hubHeaders(),
         body: JSON.stringify({
           ...baseAgent,
           status: 'working',
@@ -131,7 +132,7 @@ export async function runClaudeHook(args = []) {
     } else {
       await fetch(`${hubUrl}/api/agents/event`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: hubHeaders(),
         body: JSON.stringify({
           ...baseAgent,
           status: 'working',
