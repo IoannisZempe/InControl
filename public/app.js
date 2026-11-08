@@ -1,21 +1,19 @@
-// InControl web client — shared by macOS side panel, desktop browser and phone PWA.
+// InControl client — shared by macOS side panel, desktop browser, and phone PWA.
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 const DEVICE_NAME = detectDevice();
-const STATUS_LABEL = {
-  needs_input: 'Needs Input',
-  needs_attention: 'Attention',
-  working: 'Working',
-  idle: 'Idle',
+
+const SECTION_META = {
+  needs_input: { label: 'Needs Input', dot: 'dot-input' },
+  needs_attention: { label: 'Needs Review', dot: 'dot-attention' },
+  working: { label: 'Active', dot: 'dot-working' },
+  idle: { label: 'Idle', dot: 'dot-idle' },
 };
-const SECTION_LABEL = {
-  needs_input: '🔴 Needs your input',
-  needs_attention: '🟠 Needs your attention',
-  working: '🟢 Working — no action needed',
-  idle: '⚪ Idle',
-};
+
+const ICON_BRANCH = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>`;
+const ICON_JUMP = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>`;
 
 let state = { agents: [], counts: {}, network: {}, globalEvents: [] };
 let filter = 'all';
@@ -83,38 +81,58 @@ async function focusAgent(agentId) {
 function render() {
   renderCounts();
   renderAgents();
+  renderIntegrations();
   renderActivity();
   detectNewInputRequests();
 }
 
+function renderIntegrations() {
+  const container = $('#integrations-list');
+  if (!container) return;
+  const items = state.integrations || [];
+  container.innerHTML = items
+    .map((item) => {
+      const isConnected = item.configured || item.autoWatched;
+      return `
+        <div class="integration-row">
+          <div class="integration-info">
+            <div class="integration-title-row">
+              <span class="integration-name">${esc(item.name)}</span>
+              <span class="integration-status ${isConnected ? 'connected' : ''}">${esc(item.statusText)}</span>
+            </div>
+            <div class="integration-sub">${esc(item.subtitle)}</div>
+          </div>
+          <button class="integration-btn ${item.configured ? 'installed' : ''}" data-act="install-integration" data-target="${esc(item.id)}">
+            ${esc(item.actionLabel)}
+          </button>
+        </div>`;
+    })
+    .join('');
+}
+
 function renderCounts() {
   const c = state.counts || {};
-  setCount('#count-all', c.total || 0);
-  setCount('#count-input', c.needs_input || 0);
-  setCount('#count-attention', c.needs_attention || 0);
-  setCount('#count-working', c.working || 0);
+  $('#count-all').textContent = c.total || 0;
+  const inputEl = $('#count-input');
+  inputEl.textContent = c.needs_input || 0;
+  inputEl.classList.toggle('urgent', (c.needs_input || 0) > 0);
+  $('#count-attention').textContent = c.needs_attention || 0;
+  $('#count-working').textContent = c.working || 0;
 
   const pill = $('#urgent-pill');
   if (c.needs_input > 0) {
-    pill.textContent = `${c.needs_input} need input`;
+    pill.textContent = `${c.needs_input} waiting`;
     pill.classList.remove('hidden');
   } else {
     pill.classList.add('hidden');
   }
   const urgent = (c.needs_input || 0) + (c.needs_attention || 0);
-  document.title = urgent > 0 ? `(${urgent}) InControl` : 'InControl — Agent Side Panel';
-}
-
-function setCount(sel, n) {
-  const el = $(sel);
-  el.textContent = n;
-  el.classList.toggle('nonzero', n > 0);
+  document.title = urgent > 0 ? `(${urgent}) InControl` : 'InControl';
 }
 
 function renderAgents() {
   const list = $('#agent-list');
 
-  // Preserve focus + caret on reply input across re-renders
   const active = document.activeElement;
   const focusedAgent = active?.dataset?.replyFor;
   const caret = focusedAgent ? active.selectionStart : null;
@@ -124,18 +142,22 @@ function renderAgents() {
   if (state.agents.length === 0) {
     list.innerHTML = `
       <div class="empty-state">
-        <div class="big">🛰️</div>
-        <h3>No agents connected yet</h3>
-        <p>Connect Claude Code, Antigravity, Cursor, CLI agents, or your own custom agents.</p>
-        <div class="row">
-          <button class="action-btn primary" data-act="open-connect">+ Connect agent</button>
+        <div class="empty-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         </div>
+        <h3>No active agents</h3>
+        <p>Start a Claude Code session in your terminal or connect Cursor, Antigravity, or a CLI agent.</p>
+        <button class="connect-btn" data-act="open-connect">Connect Agent</button>
       </div>`;
     return;
   }
 
   if (agents.length === 0) {
-    list.innerHTML = `<div class="empty-state"><div class="big">✅</div><h3>All clear</h3><p>Nothing in this category.</p></div>`;
+    list.innerHTML = `
+      <div class="empty-state">
+        <h3>All clear</h3>
+        <p>No agents in this state right now.</p>
+      </div>`;
     return;
   }
 
@@ -144,7 +166,14 @@ function renderAgents() {
   for (const agent of agents) {
     if (filter === 'all' && agent.status !== currentSection) {
       currentSection = agent.status;
-      html += `<div class="section-label">${SECTION_LABEL[agent.status] || agent.status}</div>`;
+      const meta = SECTION_META[agent.status] || { label: agent.status, dot: 'dot-idle' };
+      html += `
+        <div class="section-header">
+          <div class="section-header-left">
+            <span class="status-dot ${meta.dot}"></span>
+            <span>${meta.label}</span>
+          </div>
+        </div>`;
     }
     html += renderCard(agent);
   }
@@ -162,81 +191,97 @@ function renderAgents() {
 function renderCard(a) {
   const initials = providerInitials(a.provider, a.name);
   const p = a.pendingPrompt;
-  const updated = timeAgo(a.metrics?.updatedAt);
+  const updated = timeAgo(a.metrics?.updatedAt, true);
+  const showLogs = expandedLogs.has(a.id);
 
-  let body = `
-    <div class="card-task">${esc(a.currentTask || '')}</div>
-    ${a.currentStep ? `<div class="card-step" title="${esc(a.currentStep)}">› ${esc(a.currentStep)}</div>` : ''}
-  `;
-
+  let decisionHtml = '';
   if (a.status === 'needs_input' && p) {
     const opts = (p.options || [])
       .map(
         (o) =>
-          `<button class="action-btn ${esc(o.style || '')}" data-act="respond" data-agent="${esc(a.id)}" data-action="${esc(o.id)}">${esc(o.label)}</button>`
+          `<button class="btn-decision ${esc(o.style || '')}" data-act="respond" data-agent="${esc(a.id)}" data-action="${esc(o.id)}">${esc(o.label)}</button>`
       )
       .join('');
-    body += `
-      <div class="prompt-box">
-        ${p.toolName ? `<div class="prompt-tool">${esc(p.toolName)}</div>` : ''}
+    decisionHtml = `
+      <div class="decision-zone">
         <div class="prompt-question">${esc(p.question)}</div>
         ${p.details ? `<div class="prompt-details">${esc(p.details)}</div>` : ''}
-        ${p.command ? `<pre class="prompt-command">${esc(p.command)}</pre>` : ''}
-        <div class="prompt-wait">Waiting ${timeAgo(p.createdAt, true)}</div>
-        <div class="prompt-options">${opts}</div>
+        ${p.command ? `<pre class="prompt-code">${esc(p.command)}</pre>` : ''}
+        <div class="decision-actions">${opts}</div>
         ${
           p.allowFreeText !== false
-            ? `<form class="reply-row" data-act="reply-form" data-agent="${esc(a.id)}">
-                 <input class="reply-input" data-reply-for="${esc(a.id)}" placeholder="Reply or give instructions…" value="${esc(draftReplies.get(a.id) || '')}" autocomplete="off" />
-                 <button type="submit" class="send-btn">Send</button>
+            ? `<form class="reply-form" data-act="reply-form" data-agent="${esc(a.id)}">
+                 <input class="reply-input" data-reply-for="${esc(a.id)}" placeholder="Reply with instructions…" value="${esc(draftReplies.get(a.id) || '')}" autocomplete="off" />
+                 <button type="submit" class="reply-submit">Send</button>
                </form>`
             : ''
         }
       </div>`;
   } else if (a.status === 'needs_attention') {
-    body += `
-      ${a.attentionReason ? `<div class="attention-reason">${esc(a.attentionReason)}</div>` : ''}
-      <form class="reply-row" data-act="reply-form" data-agent="${esc(a.id)}">
-        <input class="reply-input" data-reply-for="${esc(a.id)}" placeholder="Send a follow-up…" value="${esc(draftReplies.get(a.id) || '')}" autocomplete="off" />
-        <button type="submit" class="send-btn">Send</button>
+    decisionHtml = `
+      <div class="attention-bar">
+        <span class="attention-text">${esc(a.attentionReason || 'Task finished — ready for review')}</span>
+        <button class="mini-icon-btn" data-act="respond" data-agent="${esc(a.id)}" data-action="dismiss">Dismiss</button>
+      </div>
+      <form class="reply-form" data-act="reply-form" data-agent="${esc(a.id)}">
+        <input class="reply-input" data-reply-for="${esc(a.id)}" placeholder="Send follow-up…" value="${esc(draftReplies.get(a.id) || '')}" autocomplete="off" />
+        <button type="submit" class="reply-submit">Send</button>
       </form>`;
   }
 
-  if (expandedLogs.has(a.id) && a.logs?.length) {
-    body += `<ul class="log-list">${a.logs
-      .slice(0, 8)
-      .map((l) => `<li><span class="t">${clock(l.timestamp)}</span>${esc(l.message)}</li>`)
-      .join('')}</ul>`;
-  }
+  const logHtml =
+    showLogs && a.logs?.length
+      ? `<ul class="agent-log">${a.logs
+          .slice(0, 6)
+          .map((l) => `<li><span class="log-time">${clock(l.timestamp)}</span>${esc(l.message)}</li>`)
+          .join('')}</ul>`
+      : '';
 
   return `
     <article class="agent-card status-${a.status}" data-id="${esc(a.id)}">
-      <div class="card-head">
-        <div class="card-identity">
-          <div class="provider-avatar provider-${esc(a.provider)}">${initials}</div>
-          <div class="card-titles">
-            <div class="agent-name">${esc(a.name)} · ${esc(a.projectName)}</div>
-            <div class="agent-meta">${esc(a.ide)}${a.branch ? ` · <span class="branch">${esc(a.branch)}</span>` : ''}</div>
+      <div class="card-top">
+        <div class="card-title-group">
+          <span class="provider-badge provider-${esc(a.provider)}">${initials}</span>
+          <div class="title-stack">
+            <div class="title-primary">
+              <span class="project-name" title="${esc(a.workspace)}">${esc(a.projectName)}</span>
+              <span class="agent-label">${esc(a.name)}</span>
+            </div>
           </div>
         </div>
-        <span class="status-badge badge-${a.status}"><span class="dot dot-${a.status === 'needs_input' ? 'input' : a.status === 'needs_attention' ? 'attention' : a.status}"></span>${STATUS_LABEL[a.status] || a.status}</span>
-      </div>
-      ${body}
-      <div class="card-footer">
-        <span class="footer-meta">${a.metrics?.toolsRun || 0} tools · updated ${updated}</span>
-        <div class="footer-actions">
-          ${a.status === 'needs_attention' ? `<button class="ghost-btn" data-act="respond" data-agent="${esc(a.id)}" data-action="dismiss">✓ Done</button>` : ''}
-          <button class="ghost-btn" data-act="toggle-log" data-agent="${esc(a.id)}">${expandedLogs.has(a.id) ? 'Hide log' : 'Log'}</button>
-          <button class="ghost-btn" data-act="focus" data-agent="${esc(a.id)}" title="Bring the IDE / terminal window to front (macOS)">↗ Jump</button>
+        <div class="card-top-right">
+          <span class="time-label">${updated}</span>
+          <button class="mini-icon-btn" data-act="toggle-log" data-agent="${esc(a.id)}" title="Toggle activity log">${showLogs ? 'Hide' : 'Log'}</button>
+          <button class="mini-icon-btn" data-act="focus" data-agent="${esc(a.id)}" title="Focus ${esc(a.ide)} window">${ICON_JUMP}<span>Focus</span></button>
         </div>
       </div>
+
+      <div class="card-submeta">
+        <span>${esc(a.ide)}</span>
+        ${a.branch ? `<span>·</span><span class="branch-tag">${ICON_BRANCH}<span>${esc(a.branch)}</span></span>` : ''}
+      </div>
+
+      <div class="card-body">
+        ${a.currentTask ? `<div class="task-line">${esc(a.currentTask)}</div>` : ''}
+        ${
+          a.currentStep
+            ? `<div class="step-line" title="${esc(a.currentStep)}">
+                 ${a.status === 'working' ? '<span class="step-pulse"></span>' : ''}
+                 <span>${esc(a.currentStep)}</span>
+               </div>`
+            : ''
+        }
+      </div>
+
+      ${decisionHtml}
+      ${logHtml}
     </article>`;
 }
 
 function renderActivity() {
   const events = state.globalEvents || [];
   if (events[0]) {
-    $('#last-event-preview').textContent = `${events[0].agentName}: ${events[0].message}`;
+    $('#last-event-preview').textContent = `${events[0].projectName || events[0].agentName}: ${events[0].message}`;
   }
   $('#activity-log').innerHTML = events
     .map(
@@ -246,9 +291,11 @@ function renderActivity() {
     .join('');
 }
 
-// ---------------- Notifications ----------------
+// ---------------- Notifications & Audio ----------------
 function detectNewInputRequests() {
-  const now = new Set(state.agents.filter((a) => a.status === 'needs_input').map((a) => a.pendingPrompt?.requestId || a.id));
+  const now = new Set(
+    state.agents.filter((a) => a.status === 'needs_input').map((a) => a.pendingPrompt?.requestId || a.id)
+  );
   let isNew = false;
   for (const id of now) if (!lastInputIds.has(id)) isNew = true;
   if (isNew && lastInputIds.size + now.size > 0 && document.readyState === 'complete') chime();
@@ -274,22 +321,30 @@ function chime() {
       o.frequency.value = freq;
       o.type = 'sine';
       g.gain.setValueAtTime(0.0001, t + i * 0.12);
-      g.gain.exponentialRampToValueAtTime(0.12, t + i * 0.12 + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.12 + 0.3);
+      g.gain.exponentialRampToValueAtTime(0.1, t + i * 0.12 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.12 + 0.28);
       o.connect(g).connect(audioCtx.destination);
       o.start(t + i * 0.12);
-      o.stop(t + i * 0.12 + 0.32);
+      o.stop(t + i * 0.12 + 0.3);
     });
   } catch {}
 }
 
-// ---------------- Event wiring ----------------
+function syncSoundIcons() {
+  $('#icon-sound-on').classList.toggle('hidden', !soundOn);
+  $('#icon-sound-off').classList.toggle('hidden', soundOn);
+}
+syncSoundIcons();
+
+// ---------------- Event Listeners ----------------
 document.addEventListener('click', async (e) => {
-  const el = e.target.closest('[data-act], [data-close], [data-copy-target], [data-copy-text], .triage-tab, .conn-tab');
+  const el = e.target.closest(
+    '[data-act], [data-close], [data-copy-target], [data-copy-text], .filter-pill, .conn-tab'
+  );
   if (!el) return;
 
-  if (el.classList.contains('triage-tab')) {
-    $$('.triage-tab').forEach((t) => t.classList.remove('active'));
+  if (el.classList.contains('filter-pill')) {
+    $$('.filter-pill').forEach((t) => t.classList.remove('active'));
     el.classList.add('active');
     filter = el.dataset.filter;
     renderAgents();
@@ -317,6 +372,22 @@ document.addEventListener('click', async (e) => {
       return renderAgents();
     case 'open-connect':
       return $('#modal-connect').classList.remove('hidden');
+    case 'install-integration': {
+      const targetId = el.dataset.target;
+      el.textContent = 'Connecting…';
+      const res = await fetch('/api/integrations/install', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: targetId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.integrations) {
+        state.integrations = data.integrations;
+        renderIntegrations();
+      }
+      toast(data.message || 'Connected');
+      return;
+    }
   }
 });
 
@@ -352,65 +423,52 @@ $('#btn-connect').addEventListener('click', () => $('#modal-connect').classList.
 $('#btn-sound').addEventListener('click', () => {
   soundOn = !soundOn;
   localStorage.setItem('incontrol.sound', soundOn ? 'on' : 'off');
-  $('#sound-icon').textContent = soundOn ? '🔔' : '🔕';
+  syncSoundIcons();
   if (soundOn) chime();
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
 });
-$('#sound-icon').textContent = soundOn ? '🔔' : '🔕';
 
 $('#toggle-activity').addEventListener('click', () => {
   $('#activity-drawer').classList.toggle('hidden');
   $('#activity-chevron').classList.toggle('open');
 });
 
-$('#btn-fire-custom').addEventListener('click', async () => {
-  fetch('/api/agents/ask', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      id: 'custom-deploybot',
-      name: 'DeployBot',
-      provider: 'custom',
-      ide: 'Python SDK',
-      workspace: '/repo/backend',
-      wait: false,
-      question: 'Approve production Kubernetes rollout?',
-      command: 'kubectl rollout restart deployment/api',
-      options: [
-        { id: 'approve', label: 'Rollout Now', style: 'primary' },
-        { id: 'deny', label: 'Abort', style: 'danger' },
-      ],
-    }),
-  });
-  $('#modal-connect').classList.add('hidden');
-  toast('Custom agent event sent');
-});
-
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') $$('.modal-backdrop').forEach((m) => m.classList.add('hidden'));
 });
 
-// Re-render relative timestamps every 15s
 setInterval(() => {
   if (!document.activeElement?.dataset?.replyFor) renderAgents();
 }, 15000);
 
 // ---------------- Helpers ----------------
 function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  return String(s ?? '').replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+  );
 }
 function cssEscape(s) {
   return window.CSS?.escape ? CSS.escape(s) : s.replace(/"/g, '\\"');
 }
 function providerInitials(provider, name) {
-  const map = { 'claude-code': 'CC', antigravity: 'AG', cursor: 'Cu', codex: 'Cx', aider: 'Ai', opencode: 'OC', vscode: 'VS', windsurf: 'WS', custom: '⚙' };
-  return map[provider] || (name || '?').slice(0, 2);
+  const map = {
+    'claude-code': 'CC',
+    antigravity: 'AG',
+    cursor: 'Cu',
+    codex: 'Cx',
+    aider: 'Ai',
+    opencode: 'OC',
+    vscode: 'VS',
+    windsurf: 'WS',
+  };
+  return map[provider] || (name || '?').slice(0, 2).toUpperCase();
 }
 function timeAgo(ts, short = false) {
   if (!ts) return '—';
   const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
-  if (s < 10) return short ? 'just now' : 'just now';
-  if (s < 60) return `${s}s${short ? '' : ' ago'}`;
+  if (s < 10) return 'now';
+  if (s < 60) return `${s}s`;
   const m = Math.round(s / 60);
   if (m < 60) return `${m}m${short ? '' : ' ago'}`;
   return `${Math.round(m / 60)}h${short ? '' : ' ago'}`;
@@ -419,7 +477,10 @@ function clock(ts) {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 function copy(text) {
-  navigator.clipboard?.writeText(text.trim()).then(() => toast('Copied'), () => toast('Copy failed'));
+  navigator.clipboard?.writeText(text.trim()).then(
+    () => toast('Copied to clipboard'),
+    () => toast('Copy failed')
+  );
 }
 function toast(msg) {
   const t = document.createElement('div');
@@ -430,11 +491,11 @@ function toast(msg) {
 }
 function detectDevice() {
   const ua = navigator.userAgent;
-  if (/InControlPanel/.test(ua)) return 'Mac Side Panel';
+  if (/InControlPanel/.test(ua)) return 'Mac Panel';
   if (/iPhone/.test(ua)) return 'iPhone';
   if (/iPad/.test(ua)) return 'iPad';
   if (/Android/.test(ua)) return 'Android';
-  if (/Macintosh/.test(ua)) return 'Mac Browser';
+  if (/Macintosh/.test(ua)) return 'Mac';
   return 'Browser';
 }
 

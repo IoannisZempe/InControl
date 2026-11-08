@@ -50,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         panel.hidesOnDeactivate = false
         panel.backgroundColor = NSColor(red: 0.035, green: 0.043, blue: 0.063, alpha: 1)
         panel.minSize = NSSize(width: 300, height: 400)
+        panel.standardWindowButton(.closeButton)?.isHidden = true
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
 
@@ -74,7 +75,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     }
 
     func load() {
-        webView.load(URLRequest(url: hubURL))
+        WKWebsiteDataStore.default().removeData(
+            ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache],
+            modifiedSince: Date(timeIntervalSince1970: 0)
+        ) { [weak self] in
+            guard let self = self else { return }
+            let req = URLRequest(url: self.hubURL, cachePolicy: .reloadIgnoringLocalCacheData)
+            self.webView.load(req)
+        }
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {

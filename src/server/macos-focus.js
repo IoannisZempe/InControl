@@ -4,6 +4,10 @@ import os from 'node:os';
 const IDE_APP_MAP = {
   cursor: 'Cursor',
   antigravity: 'Antigravity',
+  chatgpt: 'ChatGPT',
+  'chatgpt app': 'ChatGPT',
+  'codex desktop': 'ChatGPT',
+  codex: 'ChatGPT',
   'vs code': 'Visual Studio Code',
   vscode: 'Visual Studio Code',
   windsurf: 'Windsurf',

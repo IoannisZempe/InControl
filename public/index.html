@@ -5,94 +5,90 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#090b10" />
+  <meta name="theme-color" content="#0b0c0e" />
   <link rel="manifest" href="/manifest.json" />
-  <title>InControl — Agent Side Panel</title>
-  <link rel="stylesheet" href="/styles.css" />
+  <title>InControl</title>
+  <link rel="stylesheet" href="/styles.css?v=2" />
 </head>
 <body>
   <div class="app-shell">
-    <!-- Top Sticky Control Bar -->
+    <!-- Top Header -->
     <header class="topbar">
       <div class="brand-row">
         <div class="brand-left">
-          <span id="ws-indicator" class="ws-dot connected" title="Real-time WebSocket connected"></span>
-          <h1 class="brand-title">InControl</h1>
-          <span id="urgent-pill" class="urgent-pill hidden">0 Need Input</span>
+          <span id="ws-indicator" class="ws-dot connected" title="Connected to local hub"></span>
+          <span class="brand-title">InControl</span>
+          <span id="urgent-pill" class="urgent-pill hidden">0 waiting</span>
         </div>
         <div class="brand-actions">
-          <button id="btn-sound" class="icon-btn" title="Toggle audio chime on agent input requests" aria-label="Toggle Sound">
-            <span id="sound-icon">🔔</span>
+          <button id="btn-sound" class="icon-btn" title="Toggle sound alerts" aria-label="Toggle Sound">
+            <svg id="icon-sound-on" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <svg id="icon-sound-off" class="hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
           </button>
-          <button id="btn-connect" class="chip-btn accent" title="Connect Claude Code, Antigravity, Cursor, CLI, or Custom Agents">
-            + Connect
+          <button id="btn-project" class="icon-btn" title="Pair Phone / Other Devices (QR)" aria-label="Pair Device">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
           </button>
-          <button id="btn-project" class="icon-btn qr-btn" title="Project panel to Phone, Tablet, or other devices" aria-label="Project to devices">
-            📱
+          <button id="btn-connect" class="connect-btn" title="Connect an agent or IDE">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Connect</span>
           </button>
         </div>
       </div>
 
-      <!-- Priority Triage Filter Strip -->
-      <nav class="triage-strip" aria-label="Agent attention filters">
-        <button class="triage-tab active" data-filter="all">
+      <!-- Segmented Filter Bar -->
+      <nav class="filter-bar" aria-label="Filter agents">
+        <button class="filter-pill active" data-filter="all">
           <span>All</span>
-          <span id="count-all" class="triage-count">0</span>
+          <span id="count-all" class="filter-count">0</span>
         </button>
-        <button class="triage-tab tab-input" data-filter="needs_input">
-          <span class="dot dot-input"></span>
+        <button class="filter-pill" data-filter="needs_input">
+          <span class="status-dot dot-input"></span>
           <span>Input</span>
-          <span id="count-input" class="triage-count">0</span>
+          <span id="count-input" class="filter-count">0</span>
         </button>
-        <button class="triage-tab tab-attention" data-filter="needs_attention">
-          <span class="dot dot-attention"></span>
-          <span>Attention</span>
-          <span id="count-attention" class="triage-count">0</span>
+        <button class="filter-pill" data-filter="needs_attention">
+          <span class="status-dot dot-attention"></span>
+          <span>Review</span>
+          <span id="count-attention" class="filter-count">0</span>
         </button>
-        <button class="triage-tab tab-working" data-filter="working">
-          <span class="dot dot-working"></span>
-          <span>Working</span>
-          <span id="count-working" class="triage-count">0</span>
+        <button class="filter-pill" data-filter="working">
+          <span class="status-dot dot-working"></span>
+          <span>Active</span>
+          <span id="count-working" class="filter-count">0</span>
         </button>
       </nav>
     </header>
 
-    <!-- Main Scrollable Agent Feed -->
-    <main id="agent-list" class="agent-list" aria-live="polite">
-      <!-- Populated dynamically by app.js -->
-    </main>
+    <!-- Main Agent Feed -->
+    <main id="agent-list" class="agent-list" aria-live="polite"></main>
 
-    <!-- Collapsible Live Activity Stream Footer -->
+    <!-- Minimal Activity Footer -->
     <footer class="bottom-bar">
-      <div class="bottom-bar-header" id="toggle-activity">
-        <div class="bottom-status">
-          <span class="activity-label">Activity Stream</span>
-          <span id="last-event-preview" class="last-event-preview">Listening for agent telemetry...</span>
-        </div>
-        <div class="bottom-right-actions">
-          <span id="activity-chevron" class="chevron">▲</span>
-        </div>
-      </div>
+      <button class="bottom-bar-header" id="toggle-activity" type="button">
+        <span class="activity-dot"></span>
+        <span id="last-event-preview" class="last-event-preview">Listening for agent activity…</span>
+        <svg id="activity-chevron" class="chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+      </button>
       <div id="activity-drawer" class="activity-drawer hidden">
         <ul id="activity-log" class="activity-log"></ul>
       </div>
     </footer>
   </div>
 
-  <!-- Modal 1: Cross-Device Projection (QR Code + LAN/Tailscale URLs) -->
+  <!-- Modal: Pair Phone / Other Devices -->
   <div id="modal-project" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-project-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h2 id="modal-project-title">📱 Project Across Devices</h2>
-        <button class="modal-close" data-close="modal-project">✕</button>
+        <h2 id="modal-project-title">Pair Phone or Tablet</h2>
+        <button class="modal-close" data-close="modal-project" aria-label="Close">✕</button>
       </div>
       <p class="modal-subtitle">
-        Scan with your <strong>iPhone, Android, or iPad</strong> on the same Wi-Fi or Tailscale network to monitor and reply to all your agents from anywhere.
+        Scan with your phone on the same Wi-Fi or Tailscale network. The QR link includes your one-time pairing token.
       </p>
       <div id="qr-container" class="qr-box"></div>
       <div class="url-list">
         <div class="url-row">
-          <span class="url-badge">Primary / LAN</span>
+          <span class="url-badge">LAN</span>
           <code id="url-primary" class="url-code">http://localhost:4747</code>
           <button class="copy-btn" data-copy-target="url-primary">Copy</button>
         </div>
@@ -102,132 +98,38 @@
           <button class="copy-btn" data-copy-target="url-tailscale">Copy</button>
         </div>
       </div>
-      <div class="modal-tip">
-        🔒 <strong>This QR code and link contain your pairing token.</strong> Scanning pairs the device once, and it stays paired. Don't share it. Run <code>incontrol token --rotate</code> to unpair all devices.
-      </div>
-      <div class="modal-tip">
-        <strong>Pro Tip (macOS Native Side Panel):</strong> Run <code>npm run panel</code> to open the pinned, always-on-top native macOS floating side panel.
+      <div class="modal-note">
+        Rotate token anytime with <code>incontrol token --rotate</code>.
       </div>
     </div>
   </div>
 
-  <!-- Modal 2: Connect Any Agent / IDE -->
+  <!-- Modal: Connect Agents -->
   <div id="modal-connect" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-connect-title">
-    <div class="modal-card modal-wide">
+    <div class="modal-card">
       <div class="modal-header">
-        <h2 id="modal-connect-title">🔌 Connect Your Agents & IDEs</h2>
-        <button class="modal-close" data-close="modal-connect">✕</button>
+        <h2 id="modal-connect-title">Connect Agents & IDEs</h2>
+        <button class="modal-close" data-close="modal-connect" aria-label="Close">✕</button>
       </div>
+      <p class="modal-subtitle">
+        Antigravity, Codex, and the ChatGPT Desktop app are auto-detected from your local sessions. Click below to enable two-way MCP & lifecycle hooks:
+      </p>
 
-      <div class="connector-tabs">
-        <button class="conn-tab active" data-conn="claude">Claude Code</button>
-        <button class="conn-tab" data-conn="mcp">Antigravity / Cursor / MCP</button>
-        <button class="conn-tab" data-conn="cli">Codex / Aider / CLI</button>
-        <button class="conn-tab" data-conn="custom">Custom Agent SDK</button>
-      </div>
+      <!-- Live 1-Click Integrations List -->
+      <div id="integrations-list" class="integrations-list"></div>
 
-      <!-- Tab: Claude Code -->
-      <div class="conn-pane" id="conn-claude">
-        <p class="conn-desc">
-          Connect <strong>Claude Code</strong> via native lifecycle hooks. Automatically tracks tool execution, alerts you when Claude waits for input, and optionally gates <code>Bash</code> commands from your panel or phone.
-        </p>
-        <div class="code-block-wrap">
-          <div class="code-header">
-            <span>Auto-configure ~/.claude/settings.json</span>
-            <button class="copy-btn" data-copy-text="node ./bin/incontrol.js setup claude-code --install">Copy</button>
-          </div>
-          <pre class="code-pre">node ./bin/incontrol.js setup claude-code --install</pre>
+      <div class="divider-label">Manual CLI Wrapper & Custom SDK</div>
+      <div class="code-block-wrap">
+        <div class="code-header">
+          <span>Wrap any terminal CLI (Aider, OpenCode, etc.)</span>
+          <button class="copy-btn" data-copy-target="snippet-cli">Copy</button>
         </div>
-        <div class="code-block-wrap">
-          <div class="code-header">
-            <span>Or add to ~/.claude/settings.json manually</span>
-          </div>
-          <pre class="code-pre" id="snippet-claude">{
-  "hooks": {
-    "PreToolUse": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "incontrol hook claude PreToolUse" }] }],
-    "Notification": [{ "matcher": "", "hooks": [{ "type": "command", "command": "incontrol hook claude Notification" }] }],
-    "Stop": [{ "matcher": "", "hooks": [{ "type": "command", "command": "incontrol hook claude Stop" }] }]
-  }
-}</pre>
-        </div>
-      </div>
-
-      <!-- Tab: Antigravity / Cursor / VS Code (MCP) -->
-      <div class="conn-pane hidden" id="conn-mcp">
-        <p class="conn-desc">
-          Connect <strong>Antigravity, Cursor, Windsurf, VS Code, or Claude Desktop</strong> via the built-in MCP server. Gives your IDE agent <code>incontrol_status</code> and <code>incontrol_ask_human</code> tools.
-        </p>
-        <div class="code-block-wrap">
-          <div class="code-header">
-            <span>MCP Server Configuration (mcp_config.json / .cursor/mcp.json)</span>
-            <button class="copy-btn" data-copy-target="snippet-mcp">Copy</button>
-          </div>
-          <pre class="code-pre" id="snippet-mcp">{
-  "mcpServers": {
-    "incontrol": {
-      "command": "node",
-      "args": ["/path/to/InControl/bin/incontrol.js", "mcp", "--ide", "Cursor"]
-    }
-  }
-}</pre>
-        </div>
-      </div>
-
-      <!-- Tab: CLI Agents (Codex, Aider, OpenCode) -->
-      <div class="conn-pane hidden" id="conn-cli">
-        <p class="conn-desc">
-          Wrap any terminal coding agent (<strong>Codex, Aider, OpenCode, Gemini CLI</strong>). InControl streams output, detects interactive <code>[y/n]</code> prompts, and pipes your remote replies directly into the terminal’s <code>stdin</code>.
-        </p>
-        <div class="code-block-wrap">
-          <div class="code-header">
-            <span>Wrap any CLI agent</span>
-            <button class="copy-btn" data-copy-target="snippet-cli">Copy</button>
-          </div>
-          <pre class="code-pre" id="snippet-cli"># Wrap OpenAI Codex CLI
-incontrol wrap --name "Codex" --ide "Ghostty" -- codex
-
-# Wrap Aider
-incontrol wrap --name "Aider" --ide "iTerm2" -- aider
-
-# Wrap OpenCode
-incontrol wrap --name "OpenCode" --ide "Warp" -- opencode</pre>
-        </div>
-      </div>
-
-      <!-- Tab: Custom Agents -->
-      <div class="conn-pane hidden" id="conn-custom">
-        <p class="conn-desc">
-          Connect any custom agent (Python, TypeScript, LangGraph, CrewAI, bash scripts) with a single HTTP call or the zero-dependency SDK.
-        </p>
-        <div class="code-block-wrap">
-          <div class="code-header">
-            <span>Ask Human & Wait for Response (cURL / Webhook)</span>
-            <button class="copy-btn" data-copy-target="snippet-custom">Copy</button>
-          </div>
-          <pre class="code-pre" id="snippet-custom">curl -X POST http://localhost:4747/api/agents/ask \
-  -H "Content-Type: application/json" \
-  -d '{
-    "id": "my-custom-bot",
-    "name": "DeployBot",
-    "ide": "Python SDK",
-    "workspace": "/repo/backend",
-    "question": "Approve production Kubernetes rollout?",
-    "command": "kubectl rollout restart deployment/api",
-    "options": [
-      {"id": "approve", "label": "Rollout Now", "style": "primary"},
-      {"id": "deny", "label": "Abort", "style": "danger"}
-    ]
-  }'</pre>
-        </div>
-        <div class="test-custom-row">
-          <button id="btn-fire-custom" class="action-btn primary">
-            🚀 Fire Live Custom Agent Test Event
-          </button>
-        </div>
+        <pre class="code-pre" id="snippet-cli">incontrol wrap --name "Codex" -- codex
+incontrol wrap --name "Aider" -- aider</pre>
       </div>
     </div>
   </div>
 
-  <script src="/app.js" type="module"></script>
+  <script src="/app.js?v=2" type="module"></script>
 </body>
 </html>

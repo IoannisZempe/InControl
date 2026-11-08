@@ -8,6 +8,11 @@ import QRCode from 'qrcode';
 import { AgentStore } from './store.js';
 import { focusAgentWindow, sendMacNotification } from './macos-focus.js';
 import {
+  startAutoWatcher,
+  getIntegrationsStatus,
+  installIntegration,
+} from '../connectors/auto-watcher.js';
+import {
   loadOrCreateToken,
   checkOrigin,
   isAuthorized,
@@ -77,6 +82,7 @@ export async function createInControlHub(options = {}) {
   const requireLocal = Boolean(options.strict);
 
   const store = new AgentStore();
+  const stopAutoWatcher = options.autoWatch === false ? () => {} : startAutoWatcher(store);
 
   const network = discoverNetworkUrls(port);
   network.pairingUrl = `${network.primaryProjectionUrl}/?token=${encodeURIComponent(token)}`;
@@ -220,7 +226,26 @@ export async function createInControlHub(options = {}) {
         return sendJson(res, 200, { ok: existed });
       }
 
-      // 8. Static file serving (Web UI / PWA)
+      // 8. GET /api/integrations — Live integration detection & status
+      if (req.method === 'GET' && pathname === '/api/integrations') {
+        return sendJson(res, 200, { ok: true, integrations: getIntegrationsStatus() });
+      }
+
+      // 9. POST /api/integrations/install — One-click integration installer
+      if (req.method === 'POST' && pathname === '/api/integrations/install') {
+        const body = await readJsonBody(req);
+        const result = installIntegration(body.id);
+        broadcast({
+          type: 'state_sync',
+          state: buildFullState(store, network, qrSvg),
+        });
+        return sendJson(res, 200, {
+          ...result,
+          integrations: getIntegrationsStatus(),
+        });
+      }
+
+      // 10. Static file serving (Web UI / PWA)
       let filePath = pathname === '/' ? path.join(PUBLIC_DIR, 'index.html') : path.join(PUBLIC_DIR, pathname);
       // Prevent directory traversal
       if (!filePath.startsWith(PUBLIC_DIR)) {
@@ -325,6 +350,7 @@ export async function createInControlHub(options = {}) {
     token,
     close: () =>
       new Promise((resolve) => {
+        stopAutoWatcher();
         wss.close();
         server.close(() => resolve());
       }),
@@ -335,6 +361,7 @@ function buildFullState(store, network, qrSvg) {
   return {
     agents: store.getSortedAgents(),
     counts: store.getSummaryCounts(),
+    integrations: getIntegrationsStatus(),
     network,
     qrSvg,
     globalEvents: store.globalEvents.slice(0, 25),
