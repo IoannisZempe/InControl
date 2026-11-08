@@ -1,0 +1,10 @@
+{
+  "name": "InControl — Agent Mission Control",
+  "short_name": "InControl",
+  "description": "Always-on side panel and cross-device control center for AI coding agents",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090b10",
+  "theme_color": "#090b10",
+  "orientation": "portrait-primary"
+}

@@ -1,0 +1,25 @@
+name: Feature / new connector request
+description: Suggest an idea or a new agent/IDE integration
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+  - type: input
+    id: agent
+    attributes:
+      label: Agent / IDE (if a connector request)
+      placeholder: e.g. Zed, JetBrains AI, Gemini CLI
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd be willing to open a PR for this

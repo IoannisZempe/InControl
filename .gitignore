@@ -1,0 +1,4 @@
+node_modules/
+macos/incontrol-panel
+.DS_Store
+*.log

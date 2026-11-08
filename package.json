@@ -1,0 +1,52 @@
+{
+  "name": "incontrol-agents",
+  "version": "0.1.0",
+  "description": "Always-on Side Panel & Cross-Device Mission Control for AI Coding Agents (Claude Code, Antigravity, Cursor, Codex, Aider & Custom Agents)",
+  "license": "MIT",
+  "homepage": "https://github.com/IoannisZempe/InControl#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IoannisZempe/InControl.git"
+  },
+  "bugs": {
+    "url": "https://github.com/IoannisZempe/InControl/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "public/",
+    "macos/InControlPanel.swift",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "bin": {
+    "incontrol": "./bin/incontrol.js"
+  },
+  "scripts": {
+    "start": "node ./bin/incontrol.js start",
+    "demo": "node ./bin/incontrol.js start --demo",
+    "panel": "node ./bin/incontrol.js panel",
+    "build:macos": "swiftc macos/InControlPanel.swift -o macos/incontrol-panel -framework Cocoa -framework WebKit",
+    "mcp": "node ./bin/incontrol.js mcp",
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "ai-agents",
+    "claude-code",
+    "antigravity",
+    "cursor",
+    "mcp",
+    "side-panel",
+    "mission-control",
+    "developer-tools",
+    "macos"
+  ],
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.0"
+  }
+}
