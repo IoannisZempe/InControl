@@ -1,0 +1,28 @@
+name: Bug report
+description: Something isn't working
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: dropdown
+    id: connector
+    attributes:
+      label: Connector / surface
+      multiple: true
+      options: [Claude Code hooks, MCP (Antigravity/Cursor/VS Code), CLI wrapper, Custom SDK/API, macOS side panel, Web UI, Phone/PWA]
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: macOS 26, Node 22, iPhone Safari…
