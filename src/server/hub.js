@@ -298,10 +298,11 @@ export async function createInControlHub(options = {}) {
         return sendJson(res, result.ok ? 200 : 400, result);
       }
 
-      // 10. Static file serving (Web UI / PWA)
+      // 11. Static file serving (Web UI / PWA)
       let filePath = pathname === '/' ? path.join(PUBLIC_DIR, 'index.html') : path.join(PUBLIC_DIR, pathname);
-      // Prevent directory traversal
-      if (!filePath.startsWith(PUBLIC_DIR)) {
+      // Prevent directory traversal (including sibling-prefix paths)
+      const relPath = path.relative(PUBLIC_DIR, filePath);
+      if (relPath.startsWith('..') || path.isAbsolute(relPath)) {
         res.writeHead(403);
         res.end('Forbidden');
         return;

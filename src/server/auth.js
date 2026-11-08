@@ -71,6 +71,9 @@ export function checkOrigin(req, allowedHosts) {
   if (!allowedHosts.has(hostname)) {
     return { ok: false, reason: `Host '${hostname}' not allowed` };
   }
+  if (req.headers['sec-fetch-site'] === 'cross-site') {
+    return { ok: false, reason: 'Cross-site request blocked (Sec-Fetch-Site)' };
+  }
   const origin = req.headers.origin;
   if (origin && origin !== 'null') {
     try {

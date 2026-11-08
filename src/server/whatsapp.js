@@ -273,7 +273,16 @@ export async function dispatchWhatsAppMessage(cfg, text, agent = null) {
   }
 
   if (cfg.provider === 'webhook') {
-    const res = await fetch(cfg.webhookUrl, {
+    let parsedWebhook;
+    try {
+      parsedWebhook = new URL(cfg.webhookUrl);
+    } catch {
+      throw new Error('Invalid webhook URL');
+    }
+    if (parsedWebhook.protocol !== 'http:' && parsedWebhook.protocol !== 'https:') {
+      throw new Error('Webhook URL must use http: or https:');
+    }
+    const res = await fetch(parsedWebhook.toString(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

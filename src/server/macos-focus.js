@@ -22,6 +22,7 @@ const IDE_APP_MAP = {
 
 /**
  * Focus the IDE or Terminal window associated with an agent on macOS.
+ * Uses `on run argv` positional arguments so user/agent strings are never interpolated into AppleScript code.
  */
 export function focusAgentWindow(agent) {
   return new Promise((resolve) => {
@@ -34,37 +35,38 @@ export function focusAgentWindow(agent) {
     }
 
     const ideKey = String(agent.ide || agent.provider || 'Terminal').toLowerCase().trim();
-    const appName = IDE_APP_MAP[ideKey] || agent.ide || 'Terminal';
-    const projectHint = (agent.windowHint || agent.projectName || '').replace(/"/g, '');
+    const appName = String(IDE_APP_MAP[ideKey] || agent.ide || 'Terminal').slice(0, 80);
+    const projectHint = String(agent.windowHint || agent.projectName || '').slice(0, 120);
 
-    // AppleScript that activates the target IDE/terminal app and attempts to raise the matching project window
     const script = `
-      set targetApp to "${appName.replace(/"/g, '')}"
-      set projectHint to "${projectHint}"
-      try
-        tell application targetApp to activate
-        if projectHint is not "" then
-          tell application "System Events"
-            if exists process targetApp then
-              tell process targetApp
-                set frontmost to true
-                repeat with w in windows
-                  if (name of w contains projectHint) then
-                    perform action "AXRaise" of w
-                    exit repeat
-                  end if
-                end repeat
-              end tell
-            end if
-          end tell
-        end if
-        return "Focused " & targetApp
-      on error errMsg
-        return "Error: " & errMsg
-      end try
+      on run argv
+        set targetApp to item 1 of argv
+        set projectHint to item 2 of argv
+        try
+          tell application targetApp to activate
+          if projectHint is not "" then
+            tell application "System Events"
+              if exists process targetApp then
+                tell process targetApp
+                  set frontmost to true
+                  repeat with w in windows
+                    if (name of w contains projectHint) then
+                      perform action "AXRaise" of w
+                      exit repeat
+                    end if
+                  end repeat
+                end tell
+              end if
+            end tell
+          end if
+          return "Focused " & targetApp
+        on error errMsg
+          return "Error: " & errMsg
+        end try
+      end run
     `;
 
-    execFile('osascript', ['-e', script], { timeout: 3000 }, (err, stdout) => {
+    execFile('osascript', ['-e', script, '--', appName, projectHint], { timeout: 3000 }, (err, stdout) => {
       if (err) {
         resolve({ ok: false, appName, error: err.message });
       } else {
@@ -75,13 +77,25 @@ export function focusAgentWindow(agent) {
 }
 
 /**
- * Trigger a native macOS Notification Center banner.
+ * Trigger a native macOS Notification Center banner safely via `on run argv`.
  */
 export function sendMacNotification({ title, body, subtitle = '' }) {
   if (os.platform() !== 'darwin') return;
-  const cleanTitle = String(title || 'InControl').replace(/"/g, '\\"');
-  const cleanBody = String(body || '').replace(/"/g, '\\"');
-  const cleanSub = String(subtitle || '').replace(/"/g, '\\"');
-  const script = `display notification "${cleanBody}" with title "${cleanTitle}"${cleanSub ? ` subtitle "${cleanSub}"` : ''} sound name "Glass"`;
-  execFile('osascript', ['-e', script], { timeout: 2500 }, () => {});
+  const cleanTitle = String(title || 'InControl').slice(0, 120);
+  const cleanBody = String(body || '').slice(0, 240);
+  const cleanSub = String(subtitle || '').slice(0, 120);
+
+  const script = `
+    on run argv
+      set notifTitle to item 1 of argv
+      set notifBody to item 2 of argv
+      set notifSub to item 3 of argv
+      if notifSub is not "" then
+        display notification notifBody with title notifTitle subtitle notifSub sound name "Glass"
+      else
+        display notification notifBody with title notifTitle sound name "Glass"
+      end if
+    end run
+  `;
+  execFile('osascript', ['-e', script, '--', cleanTitle, cleanBody, cleanSub], { timeout: 2500 }, () => {});
 }
