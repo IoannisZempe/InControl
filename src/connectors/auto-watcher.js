@@ -72,8 +72,15 @@ function scanAntigravitySessions(store, seenMtimes) {
   candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
   for (const item of candidates.slice(0, 3)) {
+    const agentId = `agy-${item.convId.slice(0, 8)}`;
+    const existing = store.agents.get(agentId);
+    const ageMs = Date.now() - item.mtimeMs;
+    const shouldExpireAttention = existing?.status === 'needs_attention' && ageMs >= 45_000;
+    const shouldExpireWorking = existing?.status === 'working' && ageMs >= 5 * 60_000;
     const key = `agy:${item.convId}`;
-    if (seenMtimes.get(key) === item.mtimeMs) continue;
+    if (seenMtimes.get(key) === item.mtimeMs && !shouldExpireAttention && !shouldExpireWorking) {
+      continue;
+    }
     seenMtimes.set(key, item.mtimeMs);
 
     const lines = readTailLines(item.transcriptPath, 35);
@@ -110,10 +117,8 @@ function scanAntigravitySessions(store, seenMtimes) {
       } catch {}
     }
 
-    const agentId = `agy-${item.convId.slice(0, 8)}`;
     const wsPath = workspace || process.cwd();
     const projectName = path.basename(wsPath) || 'Antigravity';
-    const ageMs = Date.now() - item.mtimeMs;
 
     // Determine status from the latest transcript step
     let status = 'idle';
@@ -157,7 +162,7 @@ function scanAntigravitySessions(store, seenMtimes) {
         status = 'working';
         currentStep = 'Thinking…';
       } else if (lastStep.type === 'PLANNER_RESPONSE' && toolCalls.length === 0) {
-        if (ageMs < 20 * 60_000) {
+        if (ageMs < 45_000) {
           status = 'needs_attention';
           currentStep = 'Response complete';
           attentionReason = (lastStep.content || 'Finished response — ready for review')
@@ -250,8 +255,19 @@ function scanCodexAndChatGptSessions(store, seenMtimes) {
     activeIds.add(agentId);
 
     const maxMtime = Math.max(...items.map((i) => i.file.mtimeMs));
+    const existing = store.agents.get(agentId);
+    const maxAgeMs = Date.now() - maxMtime;
+    const shouldExpireAttention = existing?.status === 'needs_attention' && maxAgeMs >= 45_000;
+    const shouldExpireWorking = existing?.status === 'working' && maxAgeMs >= 5 * 60_000;
     const key = `codex:${cwd}`;
-    if (seenMtimes.get(key) === maxMtime && store.agents.has(agentId)) continue;
+    if (
+      seenMtimes.get(key) === maxMtime &&
+      existing &&
+      !shouldExpireAttention &&
+      !shouldExpireWorking
+    ) {
+      continue;
+    }
     seenMtimes.set(key, maxMtime);
 
     // Find primary thread ID and title from main thread ID or parent_thread_id
@@ -350,7 +366,7 @@ function scanCodexAndChatGptSessions(store, seenMtimes) {
                 createdAt: item.file.mtimeMs,
               };
             } else if (p.type === 'task_complete' || p.type === 'turn_aborted') {
-              st = ageMs < 20 * 60_000 ? 'needs_attention' : 'idle';
+              st = ageMs < 45_000 ? 'needs_attention' : 'idle';
               step = st === 'needs_attention' ? 'Turn completed' : 'Idle';
               const msg = p.last_agent_message
                 ? String(p.last_agent_message).replace(/\s+/g, ' ').trim()

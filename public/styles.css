@@ -221,6 +221,14 @@ pre {
   transform: scale(0.95);
 }
 
+.panel-only-btn {
+  display: none;
+}
+
+html.macos-panel .panel-only-btn {
+  display: inline-flex;
+}
+
 .connect-btn {
   height: 27px;
   padding: 0 11px;

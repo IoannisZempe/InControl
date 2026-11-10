@@ -134,8 +134,9 @@ function renderCounts() {
   } else {
     pill.classList.add('hidden');
   }
-  const urgent = (c.needs_input || 0) + (c.needs_attention || 0);
-  document.title = urgent > 0 ? `(${urgent}) InControl` : 'InControl';
+  const actionRequired = c.needs_input || 0;
+  document.title = actionRequired > 0 ? `(${actionRequired}) InControl` : 'InControl';
+  window.webkit?.messageHandlers?.badge?.postMessage(document.title);
 }
 
 function renderAgents() {
@@ -440,6 +441,9 @@ $('#btn-project').addEventListener('click', () => {
 });
 
 $('#btn-connect').addEventListener('click', () => $('#modal-connect').classList.remove('hidden'));
+$('#btn-hide-panel')?.addEventListener('click', () => {
+  window.webkit?.messageHandlers?.windowDrag?.postMessage('hide');
+});
 
 function syncWhatsAppProviderPane(provider) {
   $$('.wa-provider-pane').forEach((p) => p.classList.add('hidden'));

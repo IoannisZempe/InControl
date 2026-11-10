@@ -35,6 +35,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     var statusItem: NSStatusItem!
     let hubURL: URL
     var panelWidth: CGFloat = 376
+    var autoPopupOnly: Bool = true
+    var manuallyShown: Bool = false
+    var hadUrgentAction: Bool = false
 
     init(hubURL: URL) {
         self.hubURL = hubURL
@@ -45,9 +48,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         NSApp.setActivationPolicy(.accessory)
         setupPanel()
         setupStatusItem()
-        dock()
+        positionDockFrame(animate: false)
+        // Stay hidden in menu bar by default; only pop up when an agent requires user action
+        panel.orderOut(nil)
         NotificationCenter.default.addObserver(
-            self, selector: #selector(dock),
+            self, selector: #selector(handleScreenChange),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
     }
 
@@ -149,7 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in self?.load() }
     }
 
-    @objc func dock() {
+    func positionDockFrame(animate: Bool = true) {
         guard let screen = NSScreen.main else { return }
         let f = screen.visibleFrame
         let margin: CGFloat = 8
@@ -159,7 +164,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             width: panelWidth,
             height: f.height - (margin * 2)
         )
-        panel.setFrame(frame, display: true, animate: true)
+        panel.setFrame(frame, display: panel.isVisible, animate: animate && panel.isVisible)
+    }
+
+    @objc func handleScreenChange() {
+        positionDockFrame(animate: false)
+    }
+
+    @objc func dock() {
+        positionDockFrame(animate: true)
+        manuallyShown = true
         panel.orderFrontRegardless()
     }
 
@@ -170,6 +184,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         statusItem.button?.title = "◉ InControl"
         let menu = NSMenu()
         menu.addItem(withTitle: "Show / Hide Panel", action: #selector(togglePanel), keyEquivalent: "i")
+        let autoItem = NSMenuItem(
+            title: "Only Pop Up When Action Needed",
+            action: #selector(toggleAutoPopup(_:)),
+            keyEquivalent: "a"
+        )
+        autoItem.state = autoPopupOnly ? .on : .off
+        menu.addItem(autoItem)
         menu.addItem(withTitle: "Snap to Right Edge", action: #selector(dock), keyEquivalent: "d")
         let pin = NSMenuItem(title: "Float Above Windows", action: #selector(togglePin(_:)), keyEquivalent: "t")
         pin.state = .on
@@ -183,7 +204,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     }
 
     @objc func togglePanel() {
-        if panel.isVisible { panel.orderOut(nil) } else { panel.orderFrontRegardless() }
+        if panel.isVisible {
+            manuallyShown = false
+            panel.orderOut(nil)
+        } else {
+            manuallyShown = true
+            panel.orderFrontRegardless()
+        }
+    }
+
+    @objc func toggleAutoPopup(_ sender: NSMenuItem) {
+        autoPopupOnly.toggle()
+        sender.state = autoPopupOnly ? .on : .off
+        if autoPopupOnly && !hadUrgentAction {
+            manuallyShown = false
+            panel.orderOut(nil)
+        } else if !autoPopupOnly && !panel.isVisible {
+            panel.orderFrontRegardless()
+        }
     }
 
     @objc func togglePin(_ sender: NSMenuItem) {
@@ -199,7 +237,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         if message.name == "windowDrag" {
             let cmd = (message.body as? String) ?? "drag"
             if cmd == "dock" {
-                dock()
+                positionDockFrame(animate: true)
+            } else if cmd == "hide" {
+                manuallyShown = false
+                panel.orderOut(nil)
             } else if let event = webView.lastMouseDownEvent ?? NSApp.currentEvent {
                 panel.performDrag(with: event)
             }
@@ -210,8 +251,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         if let open = title.firstIndex(of: "("), let close = title.firstIndex(of: ")"), open < close {
             let count = title[title.index(after: open)..<close]
             statusItem.button?.title = "🔴 \(count) InControl"
+            hadUrgentAction = true
+            if !panel.isVisible {
+                panel.orderFrontRegardless()
+            }
         } else {
             statusItem.button?.title = "◉ InControl"
+            if hadUrgentAction {
+                hadUrgentAction = false
+                manuallyShown = false
+            }
+            if autoPopupOnly && !manuallyShown && panel.isVisible {
+                panel.orderOut(nil)
+            }
         }
     }
 }
