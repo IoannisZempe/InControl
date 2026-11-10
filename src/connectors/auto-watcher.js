@@ -27,13 +27,14 @@ const CURSOR_MCP_CONFIG = path.join(HOME, '.cursor', 'mcp.json');
  */
 export function startAutoWatcher(store, intervalMs = 1500) {
   const seenMtimes = new Map();
+  const dismissedPrompts = new Set();
 
   function scanAll() {
     try {
-      scanAntigravitySessions(store, seenMtimes);
+      scanAntigravitySessions(store, seenMtimes, dismissedPrompts);
     } catch {}
     try {
-      scanCodexAndChatGptSessions(store, seenMtimes);
+      scanCodexAndChatGptSessions(store, seenMtimes, dismissedPrompts);
     } catch {}
   }
 
@@ -46,7 +47,7 @@ export function startAutoWatcher(store, intervalMs = 1500) {
 /**
  * Watches ~/.gemini/antigravity/brain/<conv-id>/.system_generated/logs/transcript.jsonl
  */
-function scanAntigravitySessions(store, seenMtimes) {
+function scanAntigravitySessions(store, seenMtimes, dismissedPrompts = new Set()) {
   if (!fs.existsSync(AGY_BRAIN_DIR)) return;
 
   const entries = fs.readdirSync(AGY_BRAIN_DIR, { withFileTypes: true });
@@ -197,6 +198,7 @@ function scanAntigravitySessions(store, seenMtimes) {
       currentStep,
       attentionReason,
       pendingPrompt,
+      updatedAt: item.mtimeMs,
     });
   }
 }
@@ -205,7 +207,7 @@ function scanAntigravitySessions(store, seenMtimes) {
  * Watches ~/.codex/session_index.jsonl and ~/.codex/sessions/YYYY/MM/DD/*.jsonl
  * Automatically tracks both OpenAI Codex CLI and the ChatGPT Desktop App (Codex Desktop).
  */
-function scanCodexAndChatGptSessions(store, seenMtimes) {
+function scanCodexAndChatGptSessions(store, seenMtimes, dismissedPrompts = new Set()) {
   if (!fs.existsSync(CODEX_SESSIONS_DIR)) return;
 
   // Map thread_id -> thread_name from session_index.jsonl
@@ -247,9 +249,15 @@ function scanCodexAndChatGptSessions(store, seenMtimes) {
 
   for (const [cwd, items] of byWorkspace.entries()) {
     if (activeIds.size >= 4) break;
-    // Primary file is the most recently modified file in this workspace
+    // Prefer primary user thread over internal guardian_review subthreads for metadata
+    items.sort((a, b) => {
+      const aGuard = a.meta.thread_source === 'guardian_review' ? 1 : 0;
+      const bGuard = b.meta.thread_source === 'guardian_review' ? 1 : 0;
+      if (aGuard !== bGuard) return aGuard - bGuard;
+      return b.file.mtimeMs - a.file.mtimeMs;
+    });
     const primary = items[0];
-    const { file, meta } = primary;
+    const { meta } = primary;
     const projectName = path.basename(cwd) || 'workspace';
     const agentId = `codex-${projectName.toLowerCase().replace(/[^a-z0-9-]+/g, '-')}`;
     activeIds.add(agentId);
@@ -306,12 +314,14 @@ function scanCodexAndChatGptSessions(store, seenMtimes) {
     let latestUserPrompt = null;
 
     for (const item of items.slice(0, 4)) {
-      const tailLines = readTailLines(item.file.path, 40);
+      const isGuardian = item.meta.thread_source === 'guardian_review';
+      const tailLines = readTailLines(item.file.path, 60);
       const ageMs = Date.now() - item.file.mtimeMs;
       let st = ageMs < 120_000 ? 'working' : 'idle';
       let step = ageMs < 120_000 ? 'Working…' : 'Idle';
       let reason = null;
       let prompt = null;
+      let turnHadHandoff = false;
 
       for (const raw of tailLines) {
         try {
@@ -320,19 +330,31 @@ function scanCodexAndChatGptSessions(store, seenMtimes) {
 
           if (ev.type === 'response_item') {
             if (p.type === 'message' && p.role === 'user' && Array.isArray(p.content)) {
-              const txt = p.content.find((c) => c.text)?.text || '';
+              const rawTxt = p.content.find((c) => c.text)?.text || '';
               if (
-                txt &&
-                !txt.startsWith('The following is the Codex agent history') &&
-                !txt.startsWith('<environment_context>')
+                rawTxt &&
+                !rawTxt.startsWith('The following is the Codex agent history') &&
+                !rawTxt.startsWith('<environment_context>')
               ) {
-                latestUserPrompt = latestUserPrompt || txt.trim().replace(/\s+/g, ' ').slice(0, 110);
+                const cleaned = rawTxt
+                  .replace(/<in-app-browser-context[\s\S]*?<\/in-app-browser-context>/gi, '')
+                  .replace(/^#+\s*My request:\s*/im, '')
+                  .trim()
+                  .replace(/\s+/g, ' ');
+                if (cleaned) {
+                  latestUserPrompt = cleaned.slice(0, 110);
+                }
+                turnHadHandoff = false;
+                prompt = null;
               }
             } else if (p.type === 'custom_tool_call' || p.type === 'function_call') {
               st = 'working';
               const toolName = p.name || 'tool';
               const rawInput =
                 typeof p.input === 'string' ? p.input : JSON.stringify(p.input || p.arguments || '');
+              if (rawInput.includes('markHandoff')) {
+                turnHadHandoff = true;
+              }
               const cmdMatch = rawInput.match(/cmd:\s*"([^"]+)"/);
               const cleanCmd = cmdMatch ? cmdMatch[1] : rawInput.slice(0, 80);
               step = `${toolName}: ${cleanCmd}`;
@@ -354,30 +376,60 @@ function scanCodexAndChatGptSessions(store, seenMtimes) {
               p.type === 'apply_patch_approval_request' ||
               p.type === 'request_user_input'
             ) {
-              st = 'needs_input';
-              const cmd = Array.isArray(p.command) ? p.command.join(' ') : p.command || '';
-              step = 'Waiting for approval in ' + ideName;
-              prompt = {
-                requestId: `codex_${ev.ordinal || Date.now()}`,
-                question: p.reason || `Approve command in ${projectName}?`,
-                command: cmd || null,
-                options: [{ id: 'acknowledge', label: 'Focus & Approve', style: 'primary' }],
-                allowFreeText: false,
-                createdAt: item.file.mtimeMs,
-              };
-            } else if (p.type === 'task_complete' || p.type === 'turn_aborted') {
-              st = ageMs < 45_000 ? 'needs_attention' : 'idle';
-              step = st === 'needs_attention' ? 'Turn completed' : 'Idle';
-              const msg = p.last_agent_message
-                ? String(p.last_agent_message).replace(/\s+/g, ' ').trim()
-                : '';
-              // Ignore internal approval reviewer JSON verdicts as attentionReason
-              if (msg && !msg.startsWith('{')) {
-                reason = msg.slice(0, 110);
-              } else {
-                reason = 'Turn completed in ' + agentName;
+              const reqId = `codex_${ev.ordinal || Date.now()}`;
+              if (!dismissedPrompts.has(reqId)) {
+                st = 'needs_input';
+                const cmd = Array.isArray(p.command) ? p.command.join(' ') : p.command || '';
+                step = 'Waiting for approval in ' + ideName;
+                prompt = {
+                  requestId: reqId,
+                  question: p.reason || `Approve command in ${projectName}?`,
+                  command: cmd || null,
+                  options: [
+                    { id: 'focus_and_dismiss', label: 'Focus & Approve', style: 'primary' },
+                    { id: 'dismiss', label: 'Dismiss', style: 'secondary' },
+                  ],
+                  allowFreeText: false,
+                  createdAt: item.file.mtimeMs,
+                };
               }
-              prompt = null;
+            } else if (p.type === 'task_complete' || p.type === 'turn_aborted') {
+              if (isGuardian) {
+                st = 'idle';
+                step = 'Idle';
+                prompt = null;
+                continue;
+              }
+              const rawMsg = p.last_agent_message ? String(p.last_agent_message).trim() : '';
+              const reqId = `codex_turn_${p.turn_id || ev.ordinal || item.file.mtimeMs}`;
+              const actionReq =
+                rawMsg && !rawMsg.startsWith('{')
+                  ? detectCodexActionRequest(rawMsg, turnHadHandoff, ideName)
+                  : null;
+
+              if (actionReq && !dismissedPrompts.has(reqId) && ageMs < 45 * 60_000) {
+                st = 'needs_input';
+                step = actionReq.step;
+                reason = null;
+                prompt = {
+                  requestId: reqId,
+                  question: actionReq.question,
+                  details: actionReq.details,
+                  options: actionReq.options,
+                  allowFreeText: true,
+                  createdAt: item.file.mtimeMs,
+                };
+              } else {
+                st = ageMs < 45_000 ? 'needs_attention' : 'idle';
+                step = st === 'needs_attention' ? 'Turn completed' : 'Idle';
+                const cleanMsg = rawMsg.replace(/\s+/g, ' ');
+                if (cleanMsg && !cleanMsg.startsWith('{')) {
+                  reason = cleanMsg.slice(0, 110);
+                } else {
+                  reason = 'Turn completed in ' + agentName;
+                }
+                prompt = null;
+              }
             } else if (
               p.type === 'task_started' ||
               p.type === 'exec_command_begin' ||
@@ -385,6 +437,10 @@ function scanCodexAndChatGptSessions(store, seenMtimes) {
               p.type === 'item_completed' ||
               p.type === 'token_count'
             ) {
+              if (p.type === 'task_started') {
+                turnHadHandoff = false;
+                prompt = null;
+              }
               if (ageMs < 10 * 60_000) {
                 st = 'working';
                 if (p.command) {
@@ -420,10 +476,14 @@ function scanCodexAndChatGptSessions(store, seenMtimes) {
       currentStep: best.currentStep,
       attentionReason: best.attentionReason,
       pendingPrompt: best.pendingPrompt,
+      updatedAt: maxMtime,
     });
 
     if (primaryThreadId) {
-      store.registerInputHandler(agentId, ({ action, text }) => {
+      store.registerInputHandler(agentId, ({ action, text, requestId }) => {
+        if (requestId) {
+          dismissedPrompts.add(requestId);
+        }
         if ((action === 'reply' || action === 'steer') && text?.trim()) {
           queueCodexThreadMessage(primaryThreadId, text.trim(), cwd, store, agentId);
         }
@@ -608,10 +668,10 @@ function readFirstLine(filePath) {
   }
 }
 
-function readTailLines(filePath, maxLines = 25) {
+function readTailLines(filePath, maxLines = 60) {
   try {
     const stat = fs.statSync(filePath);
-    const readSize = Math.min(stat.size, 262144);
+    const readSize = Math.min(stat.size, 1048576);
     const fd = fs.openSync(filePath, 'r');
     const buf = Buffer.alloc(readSize);
     fs.readSync(fd, buf, 0, readSize, stat.size - readSize);
@@ -621,6 +681,141 @@ function readTailLines(filePath, maxLines = 25) {
   } catch {
     return [];
   }
+}
+
+/**
+ * Detects when a Codex / ChatGPT Desktop turn ends with a message asking the user
+ * to confirm an action, complete a browser sign-in/handoff, or reply with a phrase.
+ */
+function detectCodexActionRequest(rawMsg, turnHadHandoff = false, ideName = 'ChatGPT App') {
+  if (!rawMsg) return null;
+
+  const stripMd = (s) =>
+    String(s)
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/[*`]/g, '')
+      .trim();
+
+  const paragraphs = rawMsg
+    .split(/\n\s*\n/)
+    .map((p) => stripMd(p.replace(/\s+/g, ' ')))
+    .filter(Boolean);
+
+  if (paragraphs.length === 0) return null;
+
+  // Pick the paragraph that contains the actual action request (usually the last or second-to-last paragraph)
+  let actionIdx = paragraphs.length - 1;
+  if (
+    paragraphs.length > 1 &&
+    !/\b(?:confirm|say|tell me|sign in|log in|approve|authorize|should i|would you|do you|\?)/i.test(
+      paragraphs[actionIdx]
+    ) &&
+    /\b(?:confirm|say|tell me|sign in|log in|approve|authorize|should i|would you|do you|\?)/i.test(
+      paragraphs[actionIdx - 1]
+    )
+  ) {
+    actionIdx = actionIdx - 1;
+  }
+
+  const questionPara = paragraphs[actionIdx];
+  const otherParas = paragraphs.filter((_, i) => i !== actionIdx);
+  const prevParas = otherParas.join('\n• ').slice(0, 280) || null;
+  const tailText = paragraphs.slice(-2).join(' ');
+
+  // 1. Explicit quoted/bolded phrase requested: e.g. Say **“approve quote”**, tell me **done**, reply with "yes"
+  const phraseMatch = rawMsg.match(
+    /\b(?:say|reply\s+with|type|tell\s+me)\s+(?:\*\*["“'‘`]?|["“'‘`])([^*"”'’`\n.,!]{1,32})(?:["”'’`]?\*\*|["”'’`])/i
+  );
+  const candidatePhrase = phraseMatch ? phraseMatch[1].trim() : null;
+  const isSpecificPhrase =
+    candidatePhrase &&
+    !/^(when|once|if|whether|that|what|how|why|where)\b/i.test(candidatePhrase);
+
+  if (isSpecificPhrase) {
+    return {
+      step: `Waiting for "${candidatePhrase}" in ${ideName}`,
+      question: questionPara,
+      details: prevParas,
+      options: [
+        {
+          id: 'quick_reply',
+          label: `Reply "${candidatePhrase}"`,
+          style: 'primary',
+          replyText: candidatePhrase,
+        },
+        { id: 'focus_and_dismiss', label: `Open ${ideName}`, style: 'secondary' },
+        { id: 'dismiss', label: 'Dismiss', style: 'secondary' },
+      ],
+    };
+  }
+
+  // 2. Explicit confirmation prompt: e.g. "Confirm that you want me to click Authorize campaign builder now."
+  if (
+    /\b(?:confirm that|confirm whether|please confirm|confirm before|want me to|should i|would you like me to|do you want me to|shall i|approve launch|click authorize)\b/i.test(
+      tailText
+    )
+  ) {
+    return {
+      step: `Waiting for your confirmation in ${ideName}`,
+      question: questionPara,
+      details: prevParas,
+      options: [
+        {
+          id: 'quick_reply',
+          label: 'Confirm & Proceed',
+          style: 'primary',
+          replyText: 'Confirmed, please proceed.',
+        },
+        { id: 'focus_and_dismiss', label: `Open ${ideName}`, style: 'secondary' },
+        { id: 'dismiss', label: 'Dismiss', style: 'secondary' },
+      ],
+    };
+  }
+
+  // 3. Browser handoff / OAuth sign-in / "Tell me when you reach..."
+  if (
+    turnHadHandoff ||
+    /\b(?:tell me when|let me know when|once you(?:'ve| have)|when it finishes|please sign in|sign in directly|complete .* sign-in|complete .* verification|log in to)\b/i.test(
+      tailText
+    )
+  ) {
+    return {
+      step: `Waiting on your browser / sign-in step in ${ideName}`,
+      question: questionPara,
+      details: prevParas,
+      options: [
+        {
+          id: 'quick_reply',
+          label: 'Done — Continue',
+          style: 'primary',
+          replyText: 'Done, please continue.',
+        },
+        { id: 'focus_and_dismiss', label: `Open ${ideName}`, style: 'secondary' },
+        { id: 'dismiss', label: 'Dismiss', style: 'secondary' },
+      ],
+    };
+  }
+
+  // 4. Direct question at the end of the turn
+  if (/\?\s*$/.test(questionPara)) {
+    return {
+      step: `Waiting for your answer in ${ideName}`,
+      question: questionPara,
+      details: prevParas,
+      options: [
+        {
+          id: 'quick_reply',
+          label: 'Yes, Proceed',
+          style: 'primary',
+          replyText: 'Yes, please proceed.',
+        },
+        { id: 'focus_and_dismiss', label: `Open ${ideName}`, style: 'secondary' },
+        { id: 'dismiss', label: 'Dismiss', style: 'secondary' },
+      ],
+    };
+  }
+
+  return null;
 }
 
 function findRecentJsonlFiles(dir, limit = 4) {

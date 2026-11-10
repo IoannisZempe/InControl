@@ -60,8 +60,8 @@ export class AgentStore extends EventEmitter {
       metrics: {
         toolsRun: (existing?.metrics?.toolsRun || 0) + (payload.incrementTools ? 1 : 0),
         promptsAnswered: existing?.metrics?.promptsAnswered || 0,
-        startedAt: existing?.metrics?.startedAt || now,
-        updatedAt: now,
+        startedAt: existing?.metrics?.startedAt || payload.updatedAt || now,
+        updatedAt: payload.updatedAt || now,
       },
     };
 

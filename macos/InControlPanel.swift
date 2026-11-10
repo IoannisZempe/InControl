@@ -38,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     var autoPopupOnly: Bool = true
     var manuallyShown: Bool = false
     var hadUrgentAction: Bool = false
+    var lastHubSpawnAttempt: Date = .distantPast
 
     init(hubURL: URL) {
         self.hubURL = hubURL
@@ -144,14 +145,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         }
     }
 
+    func ensureHubRunning() {
+        guard Date().timeIntervalSince(lastHubSpawnAttempt) > 8 else { return }
+        lastHubSpawnAttempt = Date()
+
+        let execURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+        let repoRoot = execURL.deletingLastPathComponent().deletingLastPathComponent()
+        let cliPath = repoRoot.appendingPathComponent("bin/incontrol.js").path
+        guard FileManager.default.fileExists(atPath: cliPath) else { return }
+
+        let nodeCandidates = ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"]
+        guard let nodeBin = nodeCandidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
+            return
+        }
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: nodeBin)
+        proc.arguments = [cliPath, "start"]
+        proc.currentDirectoryURL = repoRoot
+        proc.standardOutput = FileHandle.nullDevice
+        proc.standardError = FileHandle.nullDevice
+        try? proc.run()
+    }
+
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        ensureHubRunning()
         let html = """
         <body style="background:transparent;color:#98989d;font:13px -apple-system;display:grid;place-items:center;height:100vh;margin:0;text-align:center">
-        <div><h3 style="color:#f5f5f7;font-weight:600;margin-bottom:6px">InControl Hub Offline</h3>
-        <p style="margin:0">Run <code>incontrol start</code><br>Reconnecting…</p></div></body>
+        <div><h3 style="color:#f5f5f7;font-weight:600;margin-bottom:6px">Starting InControl Hub…</h3>
+        <p style="margin:0">Connecting to local agent watcher…</p></div></body>
         """
         webView.loadHTMLString(html, baseURL: nil)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in self?.load() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak self] in self?.load() }
     }
 
     func positionDockFrame(animate: Bool = true) {

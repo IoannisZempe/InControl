@@ -208,7 +208,7 @@ function renderCard(a) {
     const opts = (p.options || [])
       .map(
         (o) =>
-          `<button class="btn-decision ${esc(o.style || '')}" data-act="respond" data-agent="${esc(a.id)}" data-action="${esc(o.id)}">${esc(o.label)}</button>`
+          `<button class="btn-decision ${esc(o.style || '')}" data-act="respond" data-agent="${esc(a.id)}" data-action="${esc(o.id)}" ${o.replyText ? `data-reply-text="${esc(o.replyText)}"` : ''}>${esc(o.label)}</button>`
       )
       .join('');
     decisionHtml = `
@@ -386,6 +386,13 @@ document.addEventListener('click', async (e) => {
   const agentId = el.dataset.agent;
   switch (el.dataset.act) {
     case 'respond':
+      if (el.dataset.action === 'focus_and_dismiss') {
+        focusAgent(agentId);
+        return respond(agentId, 'dismiss');
+      }
+      if (el.dataset.replyText) {
+        return respond(agentId, 'reply', el.dataset.replyText);
+      }
       return respond(agentId, el.dataset.action);
     case 'focus':
       return focusAgent(agentId);
