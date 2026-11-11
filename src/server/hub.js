@@ -26,6 +26,10 @@ import {
   executeCustomFunction,
 } from './settings.js';
 import {
+  getToolIconAsset,
+  findProjectIconPath,
+} from './icons.js';
+import {
   loadOrCreateToken,
   checkOrigin,
   isAuthorized,
@@ -328,6 +332,42 @@ export async function createInControlHub(options = {}) {
         const body = await readJsonBody(req);
         const result = await executeCustomFunction(store, agentId, body.functionId);
         return sendJson(res, result.ok ? 200 : 400, result);
+      }
+
+      // 10c. GET /api/icons/tool/:toolKey & GET /api/icons/project/:agentId — Real Agentic Tool & Project Icons
+      const toolIconMatch = pathname.match(/^\/api\/icons\/tool\/([a-z0-9_-]+)$/i);
+      if (req.method === 'GET' && toolIconMatch) {
+        const asset = getToolIconAsset(toolIconMatch[1].toLowerCase());
+        res.writeHead(200, {
+          'Content-Type': asset.contentType,
+          'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
+          'X-Content-Type-Options': 'nosniff',
+          'Cache-Control': 'public, max-age=3600',
+        });
+        res.end(asset.buffer);
+        return;
+      }
+
+      const projIconMatch = pathname.match(/^\/api\/icons\/project\/([^/]+)$/);
+      if (req.method === 'GET' && projIconMatch) {
+        const agentId = decodeURIComponent(projIconMatch[1]);
+        const agent = store.agents.get(agentId);
+        const iconPath = agent ? findProjectIconPath(agent.workspace) : null;
+        if (!iconPath || !fs.existsSync(iconPath)) {
+          res.writeHead(404);
+          res.end('Not found');
+          return;
+        }
+        const ext = path.extname(iconPath).toLowerCase();
+        const mime = ext === '.svg' ? 'image/svg+xml' : 'image/png';
+        res.writeHead(200, {
+          'Content-Type': mime,
+          'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
+          'X-Content-Type-Options': 'nosniff',
+          'Cache-Control': 'public, max-age=300',
+        });
+        res.end(fs.readFileSync(iconPath));
+        return;
       }
 
       // 11. Static file serving (Web UI / PWA)

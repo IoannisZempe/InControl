@@ -20,7 +20,7 @@ export const DEFAULT_FUNCTIONS = [
   {
     id: 'fn_tests',
     label: 'Run Tests',
-    icon: '⚡',
+    icon: 'agent',
     type: 'prompt',
     payload: 'Run the test suite and fix any failing tests.',
     pinned: true,
@@ -28,7 +28,7 @@ export const DEFAULT_FUNCTIONS = [
   {
     id: 'fn_security',
     label: 'Security Check',
-    icon: '🛡️',
+    icon: 'agent',
     type: 'prompt',
     payload: 'Audit recent changes for security risks, exposed secrets, or regressions.',
     pinned: true,
@@ -36,7 +36,7 @@ export const DEFAULT_FUNCTIONS = [
   {
     id: 'fn_commit',
     label: 'Commit & Push',
-    icon: '🚀',
+    icon: 'agent',
     type: 'prompt',
     payload: 'Stage all changes, write a concise commit message, and push to origin.',
     pinned: true,
@@ -44,7 +44,7 @@ export const DEFAULT_FUNCTIONS = [
   {
     id: 'fn_git_status',
     label: 'Git Status',
-    icon: '🌿',
+    icon: 'project',
     type: 'shell',
     payload: 'git status -sb',
     pinned: true,
@@ -53,6 +53,7 @@ export const DEFAULT_FUNCTIONS = [
 
 export const DEFAULT_SETTINGS = {
   logoStyle: 'orbit', // 'orbit' | 'reticle' | 'sliders'
+  iconMode: 'both', // 'both' (Project + Tool badge) | 'tool' (ChatGPT/Claude/Codex/AG) | 'project'
   theme: 'obsidian', // 'obsidian' | 'sapphire' | 'titanium'
   dockSide: 'right', // 'right' | 'left'
   panelWidth: 386, // 348 | 386 | 436
@@ -85,6 +86,9 @@ function normalizeSettings(raw = {}) {
   const logoStyle = ['orbit', 'reticle', 'sliders'].includes(raw.logoStyle)
     ? raw.logoStyle
     : DEFAULT_SETTINGS.logoStyle;
+  const iconMode = ['both', 'tool', 'project'].includes(raw.iconMode)
+    ? raw.iconMode
+    : DEFAULT_SETTINGS.iconMode;
   const theme = ['obsidian', 'sapphire', 'titanium'].includes(raw.theme)
     ? raw.theme
     : DEFAULT_SETTINGS.theme;
@@ -103,18 +107,28 @@ function normalizeSettings(raw = {}) {
     customFunctions = raw.customFunctions
       .filter((f) => f && typeof f.label === 'string' && f.label.trim() && typeof f.payload === 'string')
       .slice(0, 20)
-      .map((f) => ({
-        id: String(f.id || `fn_${crypto.randomUUID().slice(0, 8)}`),
-        label: String(f.label).trim().slice(0, 32),
-        icon: String(f.icon || '⚡').trim().slice(0, 4),
-        type: ['prompt', 'shell', 'webhook'].includes(f.type) ? f.type : 'prompt',
-        payload: String(f.payload).trim().slice(0, 500),
-        pinned: f.pinned !== false,
-      }));
+      .map((f) => {
+        const type = ['prompt', 'shell', 'webhook'].includes(f.type) ? f.type : 'prompt';
+        let rawIcon = String(f.icon || '').trim().slice(0, 24);
+        if (!rawIcon || ['⚡', '🛡️', '🚀'].includes(rawIcon)) {
+          rawIcon = type === 'shell' ? 'project' : 'agent';
+        } else if (rawIcon === '🌿') {
+          rawIcon = 'project';
+        }
+        return {
+          id: String(f.id || `fn_${crypto.randomUUID().slice(0, 8)}`),
+          label: String(f.label).trim().slice(0, 32),
+          icon: rawIcon,
+          type,
+          payload: String(f.payload).trim().slice(0, 500),
+          pinned: f.pinned !== false,
+        };
+      });
   }
 
   return {
     logoStyle,
+    iconMode,
     theme,
     dockSide,
     panelWidth,
@@ -173,7 +187,7 @@ export async function executeCustomFunction(store, agentId, fnId) {
             .slice(0, 180);
           store.upsertAgent({
             id: agent.id,
-            currentStep: `${fn.icon} ${fn.label}: ${out || 'Completed (exit 0)'}`,
+            currentStep: `${fn.label}: ${out || 'Completed (exit 0)'}`,
             logType: err ? 'error' : 'tool',
             logMessage: `[${fn.label}] $ ${fn.payload} → ${out || 'OK'}`,
           });

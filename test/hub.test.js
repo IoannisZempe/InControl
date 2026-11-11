@@ -183,6 +183,15 @@ test('settings & custom functions: configure logo/theme and execute prompt funct
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(getBody.settings),
     });
+
+    // Verify tool & project icon endpoints
+    const toolIconRes = await fetch(`${baseUrl}/api/icons/tool/claude`);
+    assert.equal(toolIconRes.status, 200);
+    assert.match(toolIconRes.headers.get('content-type') || '', /image\/(png|svg\+xml)/);
+
+    const projIconRes = await fetch(`${baseUrl}/api/icons/project/fn-test-agent`);
+    assert.equal(projIconRes.status, 200);
+    assert.match(projIconRes.headers.get('content-type') || '', /image\/(png|svg\+xml)/);
   } finally {
     await hub.close();
   }

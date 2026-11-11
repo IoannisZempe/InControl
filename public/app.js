@@ -99,6 +99,7 @@ function applySettingsToUI() {
   $$('.logo-choice').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.logoChoice === logo);
   });
+  if ($('#cfg-icon-mode')) $('#cfg-icon-mode').value = s.iconMode || 'both';
   if ($('#cfg-theme')) $('#cfg-theme').value = theme;
   if ($('#cfg-popup-mode')) $('#cfg-popup-mode').value = s.popupMode || 'needs_input';
   if ($('#cfg-dock-side')) $('#cfg-dock-side').value = s.dockSide || 'right';
@@ -127,8 +128,17 @@ function renderIntegrations() {
   container.innerHTML = items
     .map((item) => {
       const isConnected = item.configured || item.autoWatched;
+      const iconUrl = item.iconUrl || `/api/icons/tool/${encodeURIComponent(item.id)}`;
       return `
         <div class="integration-row">
+          <div class="integration-avatar-wrap">
+            <img class="integration-icon" src="${esc(iconUrl)}" alt="${esc(item.name)}" loading="lazy" />
+            ${
+              item.secondaryIconUrl
+                ? `<img class="integration-badge-icon" src="${esc(item.secondaryIconUrl)}" alt="" loading="lazy" />`
+                : ''
+            }
+          </div>
           <div class="integration-info">
             <div class="integration-title-row">
               <span class="integration-name">${esc(item.name)}</span>
@@ -228,8 +238,57 @@ function renderAgents() {
   }
 }
 
+function renderCardAvatar(a) {
+  const iconMode = state.settings?.iconMode || 'both';
+  const toolUrl =
+    a.toolIconUrl || `/api/icons/tool/${encodeURIComponent(a.toolKey || a.provider || 'codex')}`;
+  const projUrl = a.projectIconUrl || '';
+
+  if (iconMode === 'both' && projUrl) {
+    return `
+      <div class="card-avatar-wrap has-corner-badge" title="${esc(a.projectName)} · ${esc(a.name)}">
+        <img class="avatar-main-img" src="${esc(projUrl)}" alt="${esc(a.projectName)}" loading="lazy" />
+        <img class="avatar-badge-img" src="${esc(toolUrl)}" alt="${esc(a.name)}" title="${esc(a.name)} (${esc(a.ide)})" loading="lazy" />
+      </div>`;
+  }
+
+  if (iconMode === 'project' && projUrl) {
+    return `
+      <div class="card-avatar-wrap" title="${esc(a.projectName)}">
+        <img class="avatar-main-img" src="${esc(projUrl)}" alt="${esc(a.projectName)}" loading="lazy" />
+      </div>`;
+  }
+
+  return `
+    <div class="card-avatar-wrap" title="${esc(a.name)} (${esc(a.ide)})">
+      <img class="avatar-main-img" src="${esc(toolUrl)}" alt="${esc(a.name)}" loading="lazy" />
+    </div>`;
+}
+
+function renderFunctionIconHtml(f, agent = null) {
+  const iconSpec = String(f.icon || 'agent').trim();
+  const iconMode = state.settings?.iconMode || 'both';
+  const refAgent = agent || state.agents?.[0] || null;
+  const toolUrl = refAgent?.toolIconUrl || '/api/icons/tool/codex';
+  const projUrl = refAgent?.projectIconUrl || toolUrl;
+
+  if (iconSpec.startsWith('tool:')) {
+    const toolKey = iconSpec.slice(5) || 'codex';
+    return `<img class="fn-icon-img" src="/api/icons/tool/${encodeURIComponent(toolKey)}" alt="${esc(toolKey)}" loading="lazy" />`;
+  }
+  if (iconSpec === 'project' || iconSpec === '🌿') {
+    const src = iconMode === 'tool' ? toolUrl : projUrl;
+    return `<img class="fn-icon-img" src="${esc(src)}" alt="Project" loading="lazy" />`;
+  }
+  if (iconSpec === 'agent' || ['⚡', '🛡️', '🚀'].includes(iconSpec)) {
+    const src = iconMode === 'project' ? projUrl : toolUrl;
+    return `<img class="fn-icon-img" src="${esc(src)}" alt="Agent" loading="lazy" />`;
+  }
+  return `<span>${esc(iconSpec)}</span>`;
+}
+
 function renderCard(a) {
-  const badgeSvg = providerBadgeSvg(a.provider, a.name);
+  const avatarHtml = renderCardAvatar(a);
   const p = a.pendingPrompt;
   const updated = timeAgo(a.metrics?.updatedAt, true);
   const showLogs = expandedLogs.has(a.id);
@@ -296,7 +355,7 @@ function renderCard(a) {
       ${a.status === 'working' ? '<div class="card-aurora-bar"></div>' : ''}
       <div class="card-top">
         <div class="card-title-group">
-          <span class="provider-badge provider-${esc(a.provider)}">${badgeSvg}</span>
+          ${avatarHtml}
           <div class="title-stack">
             <div class="title-primary">
               <span class="project-name" title="${esc(a.workspace)}">${esc(a.projectName)}</span>
@@ -342,7 +401,7 @@ function renderFunctionBar(a) {
     .map(
       (f) =>
         `<button type="button" class="fn-chip" data-act="run-function" data-agent="${esc(a.id)}" data-fn="${esc(f.id)}" title="${esc(f.type.toUpperCase())}: ${esc(f.payload)}">
-          <span class="fn-chip-icon">${esc(f.icon || '⚡')}</span>
+          <span class="fn-chip-icon">${renderFunctionIconHtml(f, a)}</span>
           <span>${esc(f.label)}</span>
         </button>`
     )
@@ -599,7 +658,7 @@ function renderCustomFunctionsList() {
       (f) => `
       <div class="fn-item">
         <div class="fn-item-left">
-          <span class="fn-item-icon">${esc(f.icon || '⚡')}</span>
+          <span class="fn-item-icon">${renderFunctionIconHtml(f)}</span>
           <div class="fn-item-meta">
             <div class="fn-item-title-row">
               <span class="fn-item-label">${esc(f.label)}</span>
@@ -619,7 +678,7 @@ function renderCustomFunctionsList() {
 
 $('#form-add-function')?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const icon = $('#fn-new-icon').value || '⚡';
+  const icon = $('#fn-new-icon').value || 'agent';
   const label = $('#fn-new-label').value.trim();
   const type = $('#fn-new-type').value || 'prompt';
   const payload = $('#fn-new-payload').value.trim();
@@ -642,6 +701,7 @@ $('#form-add-function')?.addEventListener('submit', async (e) => {
   toast(`Added "${label}" function`);
 });
 
+$('#cfg-icon-mode')?.addEventListener('change', (e) => saveSettingsPatch({ iconMode: e.target.value }));
 $('#cfg-theme')?.addEventListener('change', (e) => saveSettingsPatch({ theme: e.target.value }));
 $('#cfg-popup-mode')?.addEventListener('change', (e) => saveSettingsPatch({ popupMode: e.target.value }));
 $('#cfg-dock-side')?.addEventListener('change', (e) => saveSettingsPatch({ dockSide: e.target.value }));

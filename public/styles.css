@@ -504,34 +504,39 @@ html.macos-panel .panel-only-btn {
   flex: 1;
 }
 
-/* Apple Squircle App Icon Badge */
-.provider-badge {
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
+/* Apple Squircle Project / Agentic Tool Avatar + Corner Badge */
+.card-avatar-wrap {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 7.5px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 5px rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 6px rgba(0, 0, 0, 0.28);
 }
 
-.provider-claude-code {
-  background: linear-gradient(180deg, #ef875f 0%, #c85a32 100%);
+.avatar-main-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 7.5px;
+  display: block;
 }
-.provider-antigravity {
-  background: linear-gradient(180deg, #7c7aff 0%, #4e4bc8 100%);
-}
-.provider-cursor {
-  background: linear-gradient(180deg, #48484a 0%, #1c1c1e 100%);
-}
-.provider-codex {
-  background: linear-gradient(180deg, #34d85c 0%, #169c38 100%);
+
+.avatar-badge-img {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 4.5px;
+  object-fit: cover;
+  background: #14161f;
+  border: 1.2px solid rgba(20, 22, 31, 0.95);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
 }
 
 .title-stack {
@@ -608,7 +613,7 @@ html.macos-panel .panel-only-btn {
   align-items: center;
   gap: 6px;
   margin-top: 2px;
-  padding-left: 32px;
+  padding-left: 36px;
   font-size: 11px;
   color: var(--text-muted);
 }
@@ -628,7 +633,7 @@ html.macos-panel .panel-only-btn {
 /* Row 3: Task & Live Step */
 .card-body {
   margin-top: 6px;
-  padding-left: 32px;
+  padding-left: 36px;
 }
 
 .task-line {
@@ -1588,10 +1593,57 @@ html.macos-panel .panel-only-btn {
 }
 
 .fn-icon-select {
-  width: 52px;
+  width: 112px;
   flex-shrink: 0;
-  padding: 0 4px;
-  text-align: center;
+  padding: 0 6px;
+}
+
+.fn-icon-img {
+  width: 14px;
+  height: 14px;
+  border-radius: 3.5px;
+  object-fit: cover;
+  display: block;
+}
+
+.fn-item-icon .fn-icon-img {
+  width: 18px;
+  height: 18px;
+  border-radius: 4.5px;
+}
+
+.integration-avatar-wrap {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.integration-icon {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  object-fit: cover;
+  display: block;
+}
+
+.integration-badge-icon {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 4.5px;
+  object-fit: cover;
+  background: #14161f;
+  border: 1.2px solid rgba(20, 22, 31, 0.95);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
 }
 
 .fn-type-select {

@@ -521,6 +521,7 @@ export function getIntegrationsStatus() {
     {
       id: 'antigravity',
       name: 'Antigravity',
+      iconUrl: '/api/icons/tool/antigravity',
       subtitle: 'Lifecycle hooks (~/.gemini/config/hooks.json) + MCP + live transcript watcher',
       detected: agyDetected,
       autoWatched: agyDetected,
@@ -535,6 +536,8 @@ export function getIntegrationsStatus() {
     {
       id: 'codex_chatgpt',
       name: 'Codex + ChatGPT App',
+      iconUrl: '/api/icons/tool/chatgpt',
+      secondaryIconUrl: '/api/icons/tool/codex',
       subtitle: 'Auto-watches ~/.codex sessions + queues messages via codex queue & MCP',
       detected: codexDetected,
       autoWatched: codexDetected,
@@ -549,6 +552,7 @@ export function getIntegrationsStatus() {
     {
       id: 'claude',
       name: 'Claude Code',
+      iconUrl: '/api/icons/tool/claude',
       subtitle: 'Lifecycle hooks in ~/.claude/settings.json (PreToolUse, Notification, Stop)',
       detected: claudeDetected,
       autoWatched: false,
@@ -559,6 +563,7 @@ export function getIntegrationsStatus() {
     {
       id: 'cursor',
       name: 'Cursor',
+      iconUrl: '/api/icons/tool/cursor',
       subtitle: 'MCP server in ~/.cursor/mcp.json for status & human approval prompts',
       detected: cursorDetected,
       autoWatched: false,

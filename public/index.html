@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="manifest" href="/manifest.json" />
   <title>InControl</title>
-  <link rel="stylesheet" href="/styles.css?v=6" />
+  <link rel="stylesheet" href="/styles.css?v=7" />
 </head>
 <body data-theme="obsidian" data-logo="orbit">
   <div class="app-shell">
@@ -301,8 +301,8 @@ incontrol wrap --name "Aider" -- aider</pre>
 
       <!-- Segmented Tabs inside Modal -->
       <div class="settings-tabs">
-        <button type="button" class="settings-tab active" data-settings-tab="functions">⚡ Custom Functions</button>
-        <button type="button" class="settings-tab" data-settings-tab="appearance">🎨 Design, Logo & Behavior</button>
+        <button type="button" class="settings-tab active" data-settings-tab="functions">Custom Functions</button>
+        <button type="button" class="settings-tab" data-settings-tab="appearance">Design, Icons & Logo</button>
       </div>
 
       <!-- Tab 1: Custom Functions & Macros -->
@@ -317,15 +317,13 @@ incontrol wrap --name "Aider" -- aider</pre>
           <div class="divider-label">Add New Function</div>
           <div class="fn-form-row">
             <select id="fn-new-icon" class="wa-input fn-icon-select" aria-label="Function Icon">
-              <option value="⚡">⚡</option>
-              <option value="🛡️">🛡️</option>
-              <option value="🚀">🚀</option>
-              <option value="🌿">🌿</option>
-              <option value="🧪">🧪</option>
-              <option value="🧹">🧹</option>
-              <option value="🔍">🔍</option>
-              <option value="📦">📦</option>
-              <option value="✨">✨</option>
+              <option value="agent">Agent Tool Icon</option>
+              <option value="project">Project Icon</option>
+              <option value="tool:chatgpt">ChatGPT</option>
+              <option value="tool:codex">Codex</option>
+              <option value="tool:claude">Claude</option>
+              <option value="tool:antigravity">Antigravity</option>
+              <option value="tool:cursor">Cursor</option>
             </select>
             <input type="text" id="fn-new-label" class="wa-input" placeholder="Button label (e.g. Fix Lint, PR Review)" required maxlength="28" autocomplete="off" />
             <select id="fn-new-type" class="wa-input fn-type-select" aria-label="Function Type">
@@ -343,6 +341,15 @@ incontrol wrap --name "Aider" -- aider</pre>
 
       <!-- Tab 2: Design, Logo & Panel Behavior -->
       <div id="settings-pane-appearance" class="settings-pane hidden">
+        <div class="wa-field">
+          <label for="cfg-icon-mode">Card & Action Icons</label>
+          <select id="cfg-icon-mode" class="wa-input">
+            <option value="both">Project Icon + Agentic Tool Badge (ChatGPT, Claude, Codex, Antigravity)</option>
+            <option value="tool">Agentic Tool Icons Only (ChatGPT, Claude, Codex, Antigravity)</option>
+            <option value="project">Project Icons Only (with Tool Fallback)</option>
+          </select>
+        </div>
+
         <div class="wa-field">
           <label>InControl Brand Logo Mark</label>
           <div class="logo-picker-grid">
@@ -429,6 +436,6 @@ incontrol wrap --name "Aider" -- aider</pre>
     </div>
   </div>
 
-  <script src="/app.js?v=6" type="module"></script>
+  <script src="/app.js?v=7" type="module"></script>
 </body>
 </html>

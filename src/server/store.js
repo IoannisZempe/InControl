@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import crypto from 'node:crypto';
 import path from 'node:path';
+import { normalizeToolKey, findProjectIconPath } from './icons.js';
 
 /**
  * Priority order for agent attention states:
@@ -312,8 +313,13 @@ export class AgentStore extends EventEmitter {
   }
 
   serializeAgent(agent) {
+    const toolKey = normalizeToolKey(agent.provider, agent.ide, agent.name);
+    const hasProjectIcon = Boolean(findProjectIconPath(agent.workspace));
     return {
       ...agent,
+      toolKey,
+      toolIconUrl: `/api/icons/tool/${encodeURIComponent(toolKey)}`,
+      projectIconUrl: hasProjectIcon ? `/api/icons/project/${encodeURIComponent(agent.id)}` : null,
       priority: STATUS_PRIORITY[agent.status] ?? 99,
     };
   }
