@@ -559,6 +559,10 @@ $('#brand-logo-trigger')?.addEventListener('click', () => {
   $('#settings-pane-functions')?.classList.add('hidden');
   $('#settings-pane-appearance')?.classList.remove('hidden');
 });
+$('#btn-tile-panel')?.addEventListener('click', () => {
+  window.webkit?.messageHandlers?.windowDrag?.postMessage('tile');
+  toast('Snapped & fitted active window');
+});
 $('#btn-hide-panel')?.addEventListener('click', () => {
   window.webkit?.messageHandlers?.windowDrag?.postMessage('hide');
 });

@@ -117,6 +117,10 @@ pre {
   overflow: hidden;
 }
 
+html.macos-panel .app-shell {
+  max-width: 100%;
+}
+
 /* ---------- Frosted Glass Top Header & Grabber ---------- */
 .topbar {
   flex-shrink: 0;

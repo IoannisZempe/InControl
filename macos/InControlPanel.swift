@@ -15,6 +15,7 @@ final class SidePanel: NSPanel {
 
 final class PanelWebView: WKWebView {
     var lastMouseDownEvent: NSEvent?
+    var onDragFinished: (() -> Void)?
 
     override func mouseDown(with event: NSEvent) {
         lastMouseDownEvent = event
@@ -23,21 +24,24 @@ final class PanelWebView: WKWebView {
         let distFromTop = isFlipped ? loc.y : (bounds.height - loc.y)
         if distFromTop <= 18 {
             window?.performDrag(with: event)
+            onDragFinished?()
             return
         }
         super.mouseDown(with: event)
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNavigationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate {
     var panel: SidePanel!
     var webView: PanelWebView!
     var statusItem: NSStatusItem!
     var autoMenuItem: NSMenuItem?
+    var tileMenuItem: NSMenuItem?
     let hubURL: URL
     var panelWidth: CGFloat = 386
     var dockSide: String = "right"
     var autoPopupOnly: Bool = true
+    var autoTileBesidePanel: Bool = true
     var manuallyShown: Bool = false
     var hadUrgentAction: Bool = false
     var lastHubSpawnAttempt: Date = .distantPast
@@ -131,7 +135,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         webView.navigationDelegate = self
         webView.customUserAgent = "Mozilla/5.0 (Macintosh) AppleWebKit Safari InControlPanel/0.2"
         webView.setValue(false, forKey: "drawsBackground")
+        webView.onDragFinished = { [weak self] in
+            self?.snapIfNearScreenEdge()
+        }
 
+        panel.delegate = self
         visualEffect.addSubview(webView)
         panel.contentView = visualEffect
         load()
@@ -183,9 +191,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     }
 
     func positionDockFrame(animate: Bool = true) {
-        guard let screen = NSScreen.main else { return }
+        guard let screen = panel.screen ?? NSScreen.main else { return }
         let f = screen.visibleFrame
-        let margin: CGFloat = 8
+        let margin: CGFloat = 6
         let xPos = dockSide == "left" ? (f.minX + margin) : (f.maxX - panelWidth - margin)
         let frame = NSRect(
             x: xPos,
@@ -196,6 +204,118 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         panel.setFrame(frame, display: panel.isVisible, animate: animate && panel.isVisible)
     }
 
+    /// When the user drags the panel near the left or right edge of any display, automatically
+    /// snap flush to that edge, stretch to 100% of the screen's vertical height, and optionally
+    /// fit the active foreground window/page alongside the panel.
+    func snapIfNearScreenEdge() {
+        guard let screen = panel.screen ?? NSScreen.main else { return }
+        let f = screen.visibleFrame
+        let snapThreshold: CGFloat = 68
+        let pf = panel.frame
+
+        if pf.minX <= f.minX + snapThreshold {
+            dockSide = "left"
+            panelWidth = pf.width
+            positionDockFrame(animate: true)
+            if autoTileBesidePanel {
+                fitActiveWindowBesidePanel()
+            }
+        } else if pf.maxX >= f.maxX - snapThreshold {
+            dockSide = "right"
+            panelWidth = pf.width
+            positionDockFrame(animate: true)
+            if autoTileBesidePanel {
+                fitActiveWindowBesidePanel()
+            }
+        } else if pf.maxY >= f.maxY - 36 {
+            // Dragged to top edge: stretch full vertical height at current X position
+            let margin: CGFloat = 6
+            let frame = NSRect(
+                x: pf.minX,
+                y: f.minY + margin,
+                width: pf.width,
+                height: f.height - (margin * 2)
+            )
+            panel.setFrame(frame, display: true, animate: true)
+        }
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        guard let screen = panel.screen ?? NSScreen.main else { return }
+        let f = screen.visibleFrame
+        panelWidth = panel.frame.width
+        if panel.frame.minX <= f.minX + 24 || panel.frame.maxX >= f.maxX - 24 {
+            positionDockFrame(animate: true)
+            if autoTileBesidePanel {
+                fitActiveWindowBesidePanel()
+            }
+        }
+    }
+
+    @objc func fitActiveWindowBesidePanel() {
+        guard let screen = panel.screen ?? NSScreen.main,
+              let frontApp = NSWorkspace.shared.frontmostApplication,
+              let appName = frontApp.localizedName,
+              frontApp.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
+            return
+        }
+
+        let f = screen.visibleFrame
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? screen.frame.height
+        let topY = Int(primaryHeight - f.maxY)
+        let winHeight = Int(f.height)
+        let gap: CGFloat = 14
+        let winWidth = max(480, Int(f.width - panelWidth - gap))
+        let leftX = dockSide == "left"
+            ? Int(f.minX + panelWidth + gap)
+            : Int(f.minX)
+        let rightX = leftX + winWidth
+        let bottomY = topY + winHeight
+
+        // Parameterized AppleScript via argv (First tries standard bounds, then System Events position/size)
+        let script = """
+        on run argv
+            set targetApp to item 1 of argv
+            set x1 to (item 2 of argv) as integer
+            set y1 to (item 3 of argv) as integer
+            set x2 to (item 4 of argv) as integer
+            set y2 to (item 5 of argv) as integer
+            set w to (item 6 of argv) as integer
+            set h to (item 7 of argv) as integer
+            tell application "System Events"
+                if exists process targetApp then
+                    tell process targetApp
+                        if (count of windows) > 0 then
+                            set position of front window to {x1, y1}
+                            set size of front window to {w, h}
+                        end if
+                    end tell
+                end if
+            end tell
+        end run
+        """
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        proc.arguments = [
+            "-e", script,
+            appName,
+            String(leftX), String(topY), String(rightX), String(bottomY),
+            String(winWidth), String(winHeight)
+        ]
+        proc.standardOutput = FileHandle.nullDevice
+        proc.standardError = FileHandle.nullDevice
+        try? proc.run()
+    }
+
+    @objc func toggleAutoTile(_ sender: NSMenuItem) {
+        autoTileBesidePanel.toggle()
+        sender.state = autoTileBesidePanel ? .on : .off
+        if autoTileBesidePanel {
+            fitActiveWindowBesidePanel()
+        }
+    }
+
     @objc func handleScreenChange() {
         positionDockFrame(animate: false)
     }
@@ -204,6 +324,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         positionDockFrame(animate: true)
         manuallyShown = true
         panel.orderFrontRegardless()
+        if autoTileBesidePanel {
+            fitActiveWindowBesidePanel()
+        }
     }
 
     // MARK: Menu bar & Custom Vector Logo Icon
@@ -257,6 +380,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         self.autoMenuItem = autoItem
         menu.addItem(autoItem)
         menu.addItem(withTitle: "Snap to Screen Edge", action: #selector(dock), keyEquivalent: "d")
+        menu.addItem(withTitle: "Fit Active Window Beside Panel", action: #selector(fitActiveWindowBesidePanel), keyEquivalent: "f")
+        let tileItem = NSMenuItem(
+            title: "Auto-Fit Page When Dragged to Side",
+            action: #selector(toggleAutoTile(_:)),
+            keyEquivalent: "w"
+        )
+        tileItem.state = autoTileBesidePanel ? .on : .off
+        self.tileMenuItem = tileItem
+        menu.addItem(tileItem)
         let pin = NSMenuItem(title: "Float Above Windows", action: #selector(togglePin(_:)), keyEquivalent: "t")
         pin.state = .on
         menu.addItem(pin)
@@ -331,11 +463,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             let cmd = (message.body as? String) ?? "drag"
             if cmd == "dock" {
                 positionDockFrame(animate: true)
+                if autoTileBesidePanel {
+                    fitActiveWindowBesidePanel()
+                }
+            } else if cmd == "tile" {
+                positionDockFrame(animate: true)
+                fitActiveWindowBesidePanel()
             } else if cmd == "hide" {
                 manuallyShown = false
                 panel.orderOut(nil)
             } else if let event = webView.lastMouseDownEvent ?? NSApp.currentEvent {
                 panel.performDrag(with: event)
+                snapIfNearScreenEdge()
             }
             return
         }
