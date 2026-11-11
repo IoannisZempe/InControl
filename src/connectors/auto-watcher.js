@@ -689,6 +689,7 @@ function readTailLines(filePath, maxLines = 60) {
  */
 function detectCodexActionRequest(rawMsg, turnHadHandoff = false, ideName = 'ChatGPT App') {
   if (!rawMsg) return null;
+  const boundedMsg = String(rawMsg).slice(-4000);
 
   const stripMd = (s) =>
     String(s)
@@ -696,7 +697,7 @@ function detectCodexActionRequest(rawMsg, turnHadHandoff = false, ideName = 'Cha
       .replace(/[*`]/g, '')
       .trim();
 
-  const paragraphs = rawMsg
+  const paragraphs = boundedMsg
     .split(/\n\s*\n/)
     .map((p) => stripMd(p.replace(/\s+/g, ' ')))
     .filter(Boolean);
@@ -723,7 +724,7 @@ function detectCodexActionRequest(rawMsg, turnHadHandoff = false, ideName = 'Cha
   const tailText = paragraphs.slice(-2).join(' ');
 
   // 1. Explicit quoted/bolded phrase requested: e.g. Say **“approve quote”**, tell me **done**, reply with "yes"
-  const phraseMatch = rawMsg.match(
+  const phraseMatch = boundedMsg.match(
     /\b(?:say|reply\s+with|type|tell\s+me)\s+(?:\*\*["“'‘`]?|["“'‘`])([^*"”'’`\n.,!]{1,32})(?:["”'’`]?\*\*|["”'’`])/i
   );
   const candidatePhrase = phraseMatch ? phraseMatch[1].trim() : null;
@@ -775,7 +776,7 @@ function detectCodexActionRequest(rawMsg, turnHadHandoff = false, ideName = 'Cha
   // 3. Browser handoff / OAuth sign-in / "Tell me when you reach..."
   if (
     turnHadHandoff ||
-    /\b(?:tell me when|let me know when|once you(?:'ve| have)|when it finishes|please sign in|sign in directly|complete .* sign-in|complete .* verification|log in to)\b/i.test(
+    /\b(?:tell me when|let me know when|once you(?:'ve| have)|when it finishes|please sign in|sign in directly|complete [^.\n]{0,40}sign-in|complete [^.\n]{0,40}verification|log in to)\b/i.test(
       tailText
     )
   ) {

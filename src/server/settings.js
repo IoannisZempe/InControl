@@ -7,6 +7,15 @@ import { execFile } from 'node:child_process';
 const CONFIG_DIR = path.join(os.homedir(), '.incontrol');
 const SETTINGS_PATH = path.join(CONFIG_DIR, 'settings.json');
 
+// Strict allowlist of built-in read-only/safe workspace commands (prevents arbitrary command execution via API)
+export const SAFE_WORKSPACE_COMMANDS = Object.freeze({
+  'git status -sb': { bin: 'git', args: ['status', '-sb'] },
+  'git diff --stat': { bin: 'git', args: ['diff', '--stat'] },
+  'git log -n 5 --oneline': { bin: 'git', args: ['log', '-n', '5', '--oneline'] },
+  'git branch --show-current': { bin: 'git', args: ['branch', '--show-current'] },
+  'npm test': { bin: 'npm', args: ['test', '--ignore-scripts'] },
+});
+
 export const DEFAULT_FUNCTIONS = [
   {
     id: 'fn_tests',
@@ -144,17 +153,19 @@ export async function executeCustomFunction(store, agentId, fnId) {
   }
 
   if (fn.type === 'shell') {
-    const cwd = agent.workspace && fs.existsSync(agent.workspace) ? agent.workspace : os.homedir();
-    const parts = splitCommandArgs(fn.payload);
-    if (parts.length === 0) {
-      return { ok: false, error: 'Empty command' };
+    const allowed = SAFE_WORKSPACE_COMMANDS[fn.payload.trim()];
+    if (!allowed) {
+      return {
+        ok: false,
+        error: `Command not in safe allowlist. Allowed commands: ${Object.keys(SAFE_WORKSPACE_COMMANDS).join(', ')}`,
+      };
     }
-    const [bin, ...args] = parts;
+    const cwd = agent.workspace && fs.existsSync(agent.workspace) ? agent.workspace : os.homedir();
     return new Promise((resolve) => {
       execFile(
-        bin,
-        args,
-        { cwd, timeout: 15_000, maxBuffer: 256 * 1024 },
+        allowed.bin,
+        allowed.args,
+        { cwd, timeout: 15_000, maxBuffer: 256 * 1024, shell: false },
         (err, stdout, stderr) => {
           const out = String(stdout || stderr || (err ? err.message : 'Done'))
             .trim()
@@ -187,6 +198,10 @@ export async function executeCustomFunction(store, agentId, fnId) {
     if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
       return { ok: false, error: 'Webhook URL must use http:// or https://' };
     }
+    const host = parsedUrl.hostname.toLowerCase();
+    if (host === '169.254.169.254' || host === 'metadata.google.internal' || host === '0.0.0.0') {
+      return { ok: false, error: 'Webhook URL host is not permitted' };
+    }
     const resp = await fetch(parsedUrl.href, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -210,15 +225,5 @@ export async function executeCustomFunction(store, agentId, fnId) {
   }
 
   return { ok: false, error: `Unsupported function type: ${fn.type}` };
-}
-
-function splitCommandArgs(cmd) {
-  const args = [];
-  const re = /[^\s"']+|"([^"]*)"|'([^']*)'/g;
-  let m;
-  while ((m = re.exec(String(cmd || ''))) !== null) {
-    args.push(m[1] ?? m[2] ?? m[0]);
-  }
-  return args;
 }
 

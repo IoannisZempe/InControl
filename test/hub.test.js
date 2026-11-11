@@ -159,6 +159,30 @@ test('settings & custom functions: configure logo/theme and execute prompt funct
     const msgsBody = await msgsRes.json();
     assert.equal(msgsBody.messages.length, 1);
     assert.match(msgsBody.messages[0].text, /test suite/i);
+
+    // Security check: arbitrary shell command outside SAFE_WORKSPACE_COMMANDS allowlist is blocked
+    await fetch(`${baseUrl}/api/settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customFunctions: [
+          { id: 'fn_unsafe', label: 'Unsafe', icon: '⚡', type: 'shell', payload: 'node -e "process.exit(1)"' },
+        ],
+      }),
+    });
+    const blockedRes = await fetch(`${baseUrl}/api/agents/fn-test-agent/function`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ functionId: 'fn_unsafe' }),
+    });
+    assert.equal(blockedRes.status, 400);
+
+    // Restore original settings
+    await fetch(`${baseUrl}/api/settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(getBody.settings),
+    });
   } finally {
     await hub.close();
   }
