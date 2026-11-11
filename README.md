@@ -1,8 +1,14 @@
-# InControl
+<p align="center">
+  <img src="public/icon.svg" alt="InControl Logo" width="88" />
+</p>
 
-[![CI](https://github.com/IoannisZempe/InControl/actions/workflows/ci.yml/badge.svg)](https://github.com/IoannisZempe/InControl/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+<h1 align="center">InControl</h1>
+
+<p align="center">
+  <a href="https://github.com/IoannisZempe/InControl/actions/workflows/ci.yml"><img src="https://github.com/IoannisZempe/InControl/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
+  <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs welcome" /></a>
+</p>
 
 **One always-on side panel for all your AI agents.** See which agents need your input, which need your attention, and which are fine. Works across IDEs and terminals, and shows up on your Mac, phone, and any browser.
 
@@ -27,7 +33,8 @@
   - **Claude Code & Cursor:** Native lifecycle hooks (`~/.claude/settings.json`) and stdio MCP server.
 - **WhatsApp auto-escalation.** If an agent is waiting in *Needs Input* and you don't respond within your chosen timeout (`30s`–`5m`), InControl automatically sends the prompt and a 1-tap mobile link to your WhatsApp (via CallMeBot, Twilio two-way webhook, Meta Cloud API, or custom webhook).
 - **Jump to window.** On macOS, one click brings the right IDE (`Antigravity`, `ChatGPT`, `Cursor`, `VS Code`) or terminal window (`iTerm2`, `Ghostty`, `Warp`, `Terminal`) to the front.
-- **Apple Liquid Glass macOS side panel.** A native Cocoa `NSPanel` + `NSVisualEffectView` floating panel docked to the right edge of your screen with frosted glass platters and a menu bar status item.
+- **Custom 1-click functions & macros.** Add your own reusable functions (agent prompts, workspace commands like `git status -sb` or `npm test`, or webhooks) directly to every agent card.
+- **Apple Liquid Glass macOS side panel.** A native Cocoa `NSPanel` + `NSVisualEffectView` floating panel with customizable glass themes (*Liquid Obsidian*, *Midnight Sapphire*, *Graphite Titanium*), selectable brand logo marks (*Command Orbit*, *HUD Reticle*, *Control Faders*), and smart auto-pop-up when an agent requires action.
 - **Phone, tablet, and other devices.** Scan the QR code to open the panel over your LAN or Tailscale.
 - **Local-first.** Everything runs on your machine. No cloud account needed.
 

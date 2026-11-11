@@ -123,3 +123,43 @@ test('whatsapp: incoming webhook reply resolves waiting agent', async () => {
     await hub.close();
   }
 });
+
+test('settings & custom functions: configure logo/theme and execute prompt function', async () => {
+  const hub = await createInControlHub({ port: 0, localOnly: true, macNotifications: false, autoWatch: false });
+  const port = hub.server.address().port;
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  try {
+    await fetch(`${baseUrl}/api/agents/event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: 'fn-test-agent',
+        name: 'Codex',
+        provider: 'codex',
+        workspace: process.cwd(),
+        status: 'idle',
+      }),
+    });
+
+    const getRes = await fetch(`${baseUrl}/api/settings`);
+    const getBody = await getRes.json();
+    assert.equal(getBody.ok, true);
+    assert.ok(Array.isArray(getBody.settings.customFunctions));
+
+    const runRes = await fetch(`${baseUrl}/api/agents/fn-test-agent/function`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ functionId: 'fn_tests' }),
+    });
+    const runBody = await runRes.json();
+    assert.equal(runBody.ok, true);
+
+    const msgsRes = await fetch(`${baseUrl}/api/agents/fn-test-agent/messages`);
+    const msgsBody = await msgsRes.json();
+    assert.equal(msgsBody.messages.length, 1);
+    assert.match(msgsBody.messages[0].text, /test suite/i);
+  } finally {
+    await hub.close();
+  }
+});

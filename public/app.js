@@ -79,12 +79,38 @@ async function focusAgent(agentId) {
 
 // ---------------- Rendering ----------------
 function render() {
+  applySettingsToUI();
   renderCounts();
   renderAgents();
   renderIntegrations();
   renderWhatsAppStatus();
+  renderCustomFunctionsList();
   renderActivity();
   detectNewInputRequests();
+}
+
+function applySettingsToUI() {
+  const s = state.settings || {};
+  const logo = s.logoStyle || 'orbit';
+  const theme = s.theme || 'obsidian';
+  document.body.dataset.logo = logo;
+  document.body.dataset.theme = theme;
+
+  $$('.logo-choice').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.logoChoice === logo);
+  });
+  if ($('#cfg-theme')) $('#cfg-theme').value = theme;
+  if ($('#cfg-popup-mode')) $('#cfg-popup-mode').value = s.popupMode || 'needs_input';
+  if ($('#cfg-dock-side')) $('#cfg-dock-side').value = s.dockSide || 'right';
+  if ($('#cfg-panel-width')) $('#cfg-panel-width').value = String(s.panelWidth || 386);
+  if ($('#cfg-show-functions')) $('#cfg-show-functions').checked = s.showFunctionBar !== false;
+
+  // Sync native macOS panel geometry & pop-up mode
+  window.webkit?.messageHandlers?.panelConfig?.postMessage({
+    dockSide: s.dockSide || 'right',
+    panelWidth: Number(s.panelWidth || 386),
+    popupMode: s.popupMode || 'needs_input',
+  });
 }
 
 function renderWhatsAppStatus() {
@@ -134,7 +160,12 @@ function renderCounts() {
   } else {
     pill.classList.add('hidden');
   }
-  const actionRequired = c.needs_input || 0;
+  const popupMode = state.settings?.popupMode || 'needs_input';
+  const actionRequired =
+    popupMode === 'urgent_and_review'
+      ? (c.needs_input || 0) + (c.needs_attention || 0)
+      : c.needs_input || 0;
+  document.body.dataset.urgent = actionRequired > 0 ? 'true' : 'false';
   document.title = actionRequired > 0 ? `(${actionRequired}) InControl` : 'InControl';
   window.webkit?.messageHandlers?.badge?.postMessage(document.title);
 }
@@ -198,10 +229,11 @@ function renderAgents() {
 }
 
 function renderCard(a) {
-  const initials = providerInitials(a.provider, a.name);
+  const badgeSvg = providerBadgeSvg(a.provider, a.name);
   const p = a.pendingPrompt;
   const updated = timeAgo(a.metrics?.updatedAt, true);
   const showLogs = expandedLogs.has(a.id);
+  const fnBarHtml = renderFunctionBar(a);
 
   let decisionHtml = '';
   if (a.status === 'needs_input' && p) {
@@ -261,9 +293,10 @@ function renderCard(a) {
 
   return `
     <article class="agent-card status-${a.status}" data-id="${esc(a.id)}">
+      ${a.status === 'working' ? '<div class="card-aurora-bar"></div>' : ''}
       <div class="card-top">
         <div class="card-title-group">
-          <span class="provider-badge provider-${esc(a.provider)}">${initials}</span>
+          <span class="provider-badge provider-${esc(a.provider)}">${badgeSvg}</span>
           <div class="title-stack">
             <div class="title-primary">
               <span class="project-name" title="${esc(a.workspace)}">${esc(a.projectName)}</span>
@@ -296,8 +329,30 @@ function renderCard(a) {
       </div>
 
       ${decisionHtml}
+      ${fnBarHtml}
       ${logHtml}
     </article>`;
+}
+
+function renderFunctionBar(a) {
+  const s = state.settings || {};
+  if (s.showFunctionBar === false) return '';
+  const fns = (s.customFunctions || []).filter((f) => f.pinned !== false);
+  const chips = fns
+    .map(
+      (f) =>
+        `<button type="button" class="fn-chip" data-act="run-function" data-agent="${esc(a.id)}" data-fn="${esc(f.id)}" title="${esc(f.type.toUpperCase())}: ${esc(f.payload)}">
+          <span class="fn-chip-icon">${esc(f.icon || '⚡')}</span>
+          <span>${esc(f.label)}</span>
+        </button>`
+    )
+    .join('');
+
+  return `
+    <div class="card-fn-bar">
+      ${chips}
+      <button type="button" class="fn-chip fn-chip-add" data-act="open-settings" title="Add or customize functions">+ Function</button>
+    </div>`;
 }
 
 function renderActivity() {
@@ -361,9 +416,23 @@ syncSoundIcons();
 // ---------------- Event Listeners ----------------
 document.addEventListener('click', async (e) => {
   const el = e.target.closest(
-    '[data-act], [data-close], [data-copy-target], [data-copy-text], .filter-pill, .conn-tab'
+    '[data-act], [data-close], [data-copy-target], [data-copy-text], [data-settings-tab], [data-logo-choice], .filter-pill, .conn-tab'
   );
   if (!el) return;
+
+  if (el.dataset.settingsTab) {
+    const tab = el.dataset.settingsTab;
+    $$('.settings-tab').forEach((t) => t.classList.toggle('active', t.dataset.settingsTab === tab));
+    $('#settings-pane-functions')?.classList.toggle('hidden', tab !== 'functions');
+    $('#settings-pane-appearance')?.classList.toggle('hidden', tab !== 'appearance');
+    return;
+  }
+
+  if (el.dataset.logoChoice) {
+    await saveSettingsPatch({ logoStyle: el.dataset.logoChoice });
+    toast(`Logo updated: ${el.dataset.logoChoice}`);
+    return;
+  }
 
   if (el.classList.contains('filter-pill')) {
     $$('.filter-pill').forEach((t) => t.classList.remove('active'));
@@ -401,6 +470,37 @@ document.addEventListener('click', async (e) => {
       return renderAgents();
     case 'open-connect':
       return $('#modal-connect').classList.remove('hidden');
+    case 'open-settings':
+      renderCustomFunctionsList();
+      return $('#modal-settings').classList.remove('hidden');
+    case 'run-function': {
+      const fnId = el.dataset.fn;
+      el.classList.add('running');
+      const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/function`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ functionId: fnId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      el.classList.remove('running');
+      toast(data.message || data.error || 'Function executed');
+      return;
+    }
+    case 'toggle-pin-fn': {
+      const fnId = el.dataset.fn;
+      const list = [...(state.settings?.customFunctions || [])].map((f) =>
+        f.id === fnId ? { ...f, pinned: f.pinned === false } : f
+      );
+      await saveSettingsPatch({ customFunctions: list });
+      return;
+    }
+    case 'delete-fn': {
+      const fnId = el.dataset.fn;
+      const list = (state.settings?.customFunctions || []).filter((f) => f.id !== fnId);
+      await saveSettingsPatch({ customFunctions: list });
+      toast('Removed custom function');
+      return;
+    }
     case 'install-integration': {
       const targetId = el.dataset.target;
       el.textContent = 'Connecting…';
@@ -448,9 +548,101 @@ $('#btn-project').addEventListener('click', () => {
 });
 
 $('#btn-connect').addEventListener('click', () => $('#modal-connect').classList.remove('hidden'));
+$('#btn-settings')?.addEventListener('click', () => {
+  renderCustomFunctionsList();
+  $('#modal-settings').classList.remove('hidden');
+});
+$('#brand-logo-trigger')?.addEventListener('click', () => {
+  renderCustomFunctionsList();
+  $('#modal-settings').classList.remove('hidden');
+  $$('.settings-tab').forEach((t) => t.classList.toggle('active', t.dataset.settingsTab === 'appearance'));
+  $('#settings-pane-functions')?.classList.add('hidden');
+  $('#settings-pane-appearance')?.classList.remove('hidden');
+});
 $('#btn-hide-panel')?.addEventListener('click', () => {
   window.webkit?.messageHandlers?.windowDrag?.postMessage('hide');
 });
+
+async function saveSettingsPatch(patch) {
+  state.settings = { ...(state.settings || {}), ...patch };
+  applySettingsToUI();
+  renderCounts();
+  renderAgents();
+  renderCustomFunctionsList();
+  const res = await fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (data.settings) {
+    state.settings = data.settings;
+    applySettingsToUI();
+    renderCustomFunctionsList();
+  }
+}
+
+function renderCustomFunctionsList() {
+  const container = $('#custom-functions-list');
+  if (!container) return;
+  const fns = state.settings?.customFunctions || [];
+  if (fns.length === 0) {
+    container.innerHTML = `<div class="fn-empty">No custom functions yet. Add one below!</div>`;
+    return;
+  }
+  container.innerHTML = fns
+    .map(
+      (f) => `
+      <div class="fn-item">
+        <div class="fn-item-left">
+          <span class="fn-item-icon">${esc(f.icon || '⚡')}</span>
+          <div class="fn-item-meta">
+            <div class="fn-item-title-row">
+              <span class="fn-item-label">${esc(f.label)}</span>
+              <span class="fn-type-badge type-${esc(f.type)}">${esc(f.type)}</span>
+            </div>
+            <div class="fn-item-payload">${esc(f.payload)}</div>
+          </div>
+        </div>
+        <div class="fn-item-actions">
+          <button type="button" class="mini-icon-btn ${f.pinned !== false ? 'active-pin' : ''}" data-act="toggle-pin-fn" data-fn="${esc(f.id)}" title="Show/hide on agent cards">${f.pinned !== false ? 'Pinned' : 'Hidden'}</button>
+          <button type="button" class="mini-icon-btn danger-text" data-act="delete-fn" data-fn="${esc(f.id)}" title="Delete function">✕</button>
+        </div>
+      </div>`
+    )
+    .join('');
+}
+
+$('#form-add-function')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const icon = $('#fn-new-icon').value || '⚡';
+  const label = $('#fn-new-label').value.trim();
+  const type = $('#fn-new-type').value || 'prompt';
+  const payload = $('#fn-new-payload').value.trim();
+  if (!label || !payload) return;
+
+  const list = [
+    ...(state.settings?.customFunctions || []),
+    {
+      id: `fn_${Date.now().toString(36)}`,
+      icon,
+      label,
+      type,
+      payload,
+      pinned: true,
+    },
+  ];
+  await saveSettingsPatch({ customFunctions: list });
+  $('#fn-new-label').value = '';
+  $('#fn-new-payload').value = '';
+  toast(`Added "${label}" function`);
+});
+
+$('#cfg-theme')?.addEventListener('change', (e) => saveSettingsPatch({ theme: e.target.value }));
+$('#cfg-popup-mode')?.addEventListener('change', (e) => saveSettingsPatch({ popupMode: e.target.value }));
+$('#cfg-dock-side')?.addEventListener('change', (e) => saveSettingsPatch({ dockSide: e.target.value }));
+$('#cfg-panel-width')?.addEventListener('change', (e) => saveSettingsPatch({ panelWidth: Number(e.target.value) }));
+$('#cfg-show-functions')?.addEventListener('change', (e) => saveSettingsPatch({ showFunctionBar: e.target.checked }));
 
 function syncWhatsAppProviderPane(provider) {
   $$('.wa-provider-pane').forEach((p) => p.classList.add('hidden'));
@@ -574,18 +766,23 @@ function esc(s) {
 function cssEscape(s) {
   return window.CSS?.escape ? CSS.escape(s) : s.replace(/"/g, '\\"');
 }
-function providerInitials(provider, name) {
-  const map = {
-    'claude-code': 'CC',
-    antigravity: 'AG',
-    cursor: 'Cu',
-    codex: 'Cx',
-    aider: 'Ai',
-    opencode: 'OC',
-    vscode: 'VS',
-    windsurf: 'WS',
-  };
-  return map[provider] || (name || '?').slice(0, 2).toUpperCase();
+function providerBadgeSvg(provider, name) {
+  switch (provider) {
+    case 'codex':
+      // OpenAI / Codex geometric knot mark
+      return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 20.66 7 20.66 17 12 22 3.34 17 3.34 7 12 2"/><circle cx="12" cy="12" r="3.2"/></svg>`;
+    case 'antigravity':
+      // Google Antigravity 4-point star + orbit
+      return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 C13.2 8.5 15.5 10.8 21.5 12 C15.5 13.2 13.2 15.5 12 21.5 C10.8 15.5 8.5 13.2 2.5 12 C8.5 10.8 10.8 8.5 12 2.5 Z"/></svg>`;
+    case 'claude-code':
+      // Claude sunburst / spark mark
+      return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/><line x1="18.4" y1="5.6" x2="5.6" y2="18.4"/></svg>`;
+    case 'cursor':
+      // Cursor 3D vector arrow cube
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 4l16 6.5-7 2.5-2.5 7L4 4z"/></svg>`;
+    default:
+      return `<span>${esc((name || '?').slice(0, 2).toUpperCase())}</span>`;
+  }
 }
 function timeAgo(ts, short = false) {
   if (!ts) return '—';

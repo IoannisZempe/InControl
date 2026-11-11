@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <!-- Deep Liquid Obsidian Squircle Background -->
+    <linearGradient id="bgGrad" x1="64" y1="32" x2="448" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1A2138"/>
+      <stop offset="48%" stop-color="#0D111D"/>
+      <stop offset="100%" stop-color="#070910"/>
+    </linearGradient>
+
+    <!-- Ambient Radial Glow -->
+    <radialGradient id="coreGlow" cx="256" cy="256" r="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0A84FF" stop-opacity="0.48"/>
+      <stop offset="55%" stop-color="#5E5CE6" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Orbit Ring Iridescent Stroke -->
+    <linearGradient id="orbitStroke" x1="112" y1="112" x2="400" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#64D2FF"/>
+      <stop offset="50%" stop-color="#0A84FF"/>
+      <stop offset="100%" stop-color="#5E5CE6"/>
+    </linearGradient>
+
+    <!-- Central Command Core Gradient -->
+    <linearGradient id="centerCore" x1="208" y1="200" x2="304" y2="312" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7AF0FF"/>
+      <stop offset="50%" stop-color="#0A84FF"/>
+      <stop offset="100%" stop-color="#5E5CE6"/>
+    </linearGradient>
+
+    <!-- Specular Top Rim -->
+    <linearGradient id="rimLight" x1="256" y1="16" x2="256" y2="496" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.38"/>
+      <stop offset="35%" stop-color="#FFFFFF" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.04"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Apple Squircle Base -->
+  <rect x="20" y="20" width="472" height="472" rx="112" fill="url(#bgGrad)"/>
+  <rect x="20" y="20" width="472" height="472" rx="112" fill="url(#coreGlow)"/>
+  <rect x="21" y="21" width="470" height="470" rx="111" stroke="url(#rimLight)" stroke-width="2.5"/>
+
+  <!-- Precision HUD Crosshair Ticks -->
+  <g stroke="#64D2FF" stroke-opacity="0.28" stroke-width="3" stroke-linecap="round">
+    <line x1="256" y1="68" x2="256" y2="88"/>
+    <line x1="256" y1="424" x2="256" y2="444"/>
+    <line x1="68" y1="256" x2="88" y2="256"/>
+    <line x1="424" y1="256" x2="444" y2="256"/>
+  </g>
+
+  <!-- Outer Agent Orbit Track -->
+  <circle cx="256" cy="256" r="150" stroke="url(#orbitStroke)" stroke-opacity="0.35" stroke-width="4" stroke-dasharray="10 8"/>
+
+  <!-- Primary Command Sweep Arc -->
+  <path d="M 149.9 149.9 A 150 150 0 1 1 118.4 316.2" stroke="url(#orbitStroke)" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- Inner Control Ring -->
+  <circle cx="256" cy="256" r="96" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="3"/>
+  <path d="M 256 160 A 96 96 0 0 1 352 256" stroke="#64D2FF" stroke-opacity="0.85" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Vectors Linking Satellite Agents to Central Command Core -->
+  <g stroke="#64D2FF" stroke-opacity="0.32" stroke-width="2.5" stroke-dasharray="4 4">
+    <line x1="256" y1="256" x2="150" y2="150"/>
+    <line x1="256" y1="256" x2="386" y2="181"/>
+    <line x1="256" y1="256" x2="119" y2="316"/>
+  </g>
+
+  <!-- Central Command Core (You In Control) -->
+  <circle cx="256" cy="256" r="46" fill="url(#centerCore)"/>
+  <circle cx="256" cy="256" r="45" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="2"/>
+  <!-- Inner Specular Core Dot -->
+  <circle cx="256" cy="256" r="16" fill="#FFFFFF"/>
+
+  <!-- Satellite Agent 1: Active (Emerald) -->
+  <circle cx="150" cy="150" r="20" fill="#0D1322" stroke="#30D158" stroke-width="5"/>
+  <circle cx="150" cy="150" r="8" fill="#30D158"/>
+
+  <!-- Satellite Agent 2: Needs Input / Prompting (Amber Gold) -->
+  <circle cx="386" cy="181" r="22" fill="#0D1322" stroke="#FF9F0A" stroke-width="5"/>
+  <circle cx="386" cy="181" r="9" fill="#FF9F0A"/>
+
+  <!-- Satellite Agent 3: Synced (Cyan) -->
+  <circle cx="119" cy="316" r="18" fill="#0D1322" stroke="#64D2FF" stroke-width="4.5"/>
+  <circle cx="119" cy="316" r="7" fill="#64D2FF"/>
+</svg>

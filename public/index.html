@@ -5,27 +5,68 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#161618" />
+  <meta name="theme-color" content="#0d111d" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="manifest" href="/manifest.json" />
   <title>InControl</title>
-  <link rel="stylesheet" href="/styles.css?v=5" />
+  <link rel="stylesheet" href="/styles.css?v=6" />
 </head>
-<body>
+<body data-theme="obsidian" data-logo="orbit">
   <div class="app-shell">
     <!-- Top Header & Native Drag Region -->
     <header class="topbar">
       <!-- Dedicated Apple Grabber Bar (Drag anywhere here or double-click to snap right) -->
-      <div class="drag-bar" title="Drag to move panel · Double-click to snap right">
+      <div class="drag-bar" title="Drag to move panel · Double-click to snap to edge">
         <span class="grabber-pill"></span>
       </div>
 
       <div class="brand-row">
         <div class="brand-left">
-          <span id="ws-indicator" class="ws-dot connected" title="Connected to local hub"></span>
-          <span class="brand-title">InControl</span>
+          <div class="brand-logo-wrap" id="brand-logo-trigger" title="InControl Mission Control · Click to customize logo & functions">
+            <!-- Concept 1: Command Orbit (Default) -->
+            <svg class="brand-logo logo-orbit" width="22" height="22" viewBox="0 0 32 32" fill="none">
+              <circle cx="16" cy="16" r="12" stroke="currentColor" stroke-opacity="0.28" stroke-width="1.6" stroke-dasharray="3 2.5"/>
+              <path d="M 7.5 7.5 A 12 12 0 1 1 5.6 21" stroke="url(#hdrGrad)" stroke-width="2.2" stroke-linecap="round"/>
+              <circle cx="16" cy="16" r="4.5" fill="url(#hdrGrad)"/>
+              <circle cx="16" cy="16" r="1.8" fill="#ffffff"/>
+              <circle class="logo-sat-1" cx="7.5" cy="7.5" r="2.3" fill="#30d158"/>
+              <circle class="logo-sat-2" cx="26.2" cy="10.2" r="2.3" fill="#64d2ff"/>
+              <defs>
+                <linearGradient id="hdrGrad" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stop-color="#64d2ff"/>
+                  <stop offset="50%" stop-color="#0a84ff"/>
+                  <stop offset="100%" stop-color="#5e5ce6"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <!-- Concept 2: HUD Reticle -->
+            <svg class="brand-logo logo-reticle" width="22" height="22" viewBox="0 0 32 32" fill="none">
+              <path d="M5 11V7a2 2 0 0 1 2-2h4M21 5h4a2 2 0 0 1 2 2v4M27 21v4a2 2 0 0 1-2 2h-4M11 27H7a2 2 0 0 1-2-2v-4" stroke="#64d2ff" stroke-width="2.2" stroke-linecap="round"/>
+              <rect x="11.5" y="11.5" width="9" height="9" rx="2.2" transform="rotate(45 16 16)" fill="url(#hdrGrad)" stroke="#ffffff" stroke-opacity="0.6" stroke-width="1.2"/>
+              <circle cx="16" cy="16" r="1.8" fill="#ffffff"/>
+            </svg>
+            <!-- Concept 3: Control Sliders -->
+            <svg class="brand-logo logo-sliders" width="22" height="22" viewBox="0 0 32 32" fill="none">
+              <line x1="10" y1="6" x2="10" y2="26" stroke="#ffffff" stroke-opacity="0.28" stroke-width="2.2" stroke-linecap="round"/>
+              <line x1="10" y1="14" x2="10" y2="26" stroke="#64d2ff" stroke-width="2.4" stroke-linecap="round"/>
+              <circle cx="10" cy="12" r="3.6" fill="#0a84ff" stroke="#ffffff" stroke-width="1.5"/>
+              <line x1="22" y1="6" x2="22" y2="26" stroke="#ffffff" stroke-opacity="0.28" stroke-width="2.2" stroke-linecap="round"/>
+              <line x1="22" y1="19" x2="22" y2="26" stroke="#30d158" stroke-width="2.4" stroke-linecap="round"/>
+              <circle cx="22" cy="18" r="3.6" fill="#30d158" stroke="#ffffff" stroke-width="1.5"/>
+            </svg>
+            <span id="ws-indicator" class="ws-dot connected" title="Connected to local hub"></span>
+          </div>
+          <div class="brand-title-stack">
+            <span class="brand-title">InControl</span>
+            <span class="brand-subtitle">Mission Control</span>
+          </div>
           <span id="urgent-pill" class="urgent-pill hidden">0 waiting</span>
         </div>
         <div class="brand-actions">
+          <button id="btn-settings" class="icon-btn" title="Customize functions, appearance & logo" aria-label="Customize & Functions">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          </button>
           <button id="btn-sound" class="icon-btn" title="Toggle sound alerts" aria-label="Toggle Sound">
             <svg id="icon-sound-on" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             <svg id="icon-sound-off" class="hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -247,6 +288,144 @@ incontrol wrap --name "Aider" -- aider</pre>
     </div>
   </div>
 
-  <script src="/app.js?v=5" type="module"></script>
+  <!-- Modal: Customize Functions, Design & Logo -->
+  <div id="modal-settings" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-settings-title">
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <h2 id="modal-settings-title">Customize InControl</h2>
+        <button class="modal-close" data-close="modal-settings" aria-label="Close">✕</button>
+      </div>
+
+      <!-- Segmented Tabs inside Modal -->
+      <div class="settings-tabs">
+        <button type="button" class="settings-tab active" data-settings-tab="functions">⚡ Custom Functions</button>
+        <button type="button" class="settings-tab" data-settings-tab="appearance">🎨 Design, Logo & Behavior</button>
+      </div>
+
+      <!-- Tab 1: Custom Functions & Macros -->
+      <div id="settings-pane-functions" class="settings-pane">
+        <p class="modal-subtitle">
+          Add 1-click functions to your agent cards — send custom prompts/macros, run workspace commands, or trigger webhooks.
+        </p>
+
+        <div id="custom-functions-list" class="custom-functions-list"></div>
+
+        <form id="form-add-function" class="add-fn-form">
+          <div class="divider-label">Add New Function</div>
+          <div class="fn-form-row">
+            <select id="fn-new-icon" class="wa-input fn-icon-select" aria-label="Function Icon">
+              <option value="⚡">⚡</option>
+              <option value="🛡️">🛡️</option>
+              <option value="🚀">🚀</option>
+              <option value="🌿">🌿</option>
+              <option value="🧪">🧪</option>
+              <option value="🧹">🧹</option>
+              <option value="🔍">🔍</option>
+              <option value="📦">📦</option>
+              <option value="✨">✨</option>
+            </select>
+            <input type="text" id="fn-new-label" class="wa-input" placeholder="Button label (e.g. Fix Lint, PR Review)" required maxlength="28" autocomplete="off" />
+            <select id="fn-new-type" class="wa-input fn-type-select" aria-label="Function Type">
+              <option value="prompt">Agent Prompt</option>
+              <option value="shell">Command</option>
+              <option value="webhook">Webhook</option>
+            </select>
+          </div>
+          <div class="fn-form-row">
+            <input type="text" id="fn-new-payload" class="wa-input" placeholder="Instruction to send to agent (or command like git status -sb)…" required autocomplete="off" />
+            <button type="submit" class="btn-decision primary fn-add-btn">+ Add</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tab 2: Design, Logo & Panel Behavior -->
+      <div id="settings-pane-appearance" class="settings-pane hidden">
+        <div class="wa-field">
+          <label>InControl Brand Logo Mark</label>
+          <div class="logo-picker-grid">
+            <button type="button" class="logo-choice active" data-logo-choice="orbit">
+              <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+                <circle cx="16" cy="16" r="12" stroke="#64d2ff" stroke-opacity="0.35" stroke-width="1.6" stroke-dasharray="3 2.5"/>
+                <path d="M 7.5 7.5 A 12 12 0 1 1 5.6 21" stroke="#0a84ff" stroke-width="2.4" stroke-linecap="round"/>
+                <circle cx="16" cy="16" r="4.8" fill="#0a84ff"/>
+                <circle cx="16" cy="16" r="1.9" fill="#ffffff"/>
+                <circle cx="7.5" cy="7.5" r="2.4" fill="#30d158"/>
+                <circle cx="26.2" cy="10.2" r="2.4" fill="#ff9f0a"/>
+              </svg>
+              <span class="logo-choice-title">Command Orbit</span>
+              <span class="logo-choice-sub">Agents orbiting your core</span>
+            </button>
+
+            <button type="button" class="logo-choice" data-logo-choice="reticle">
+              <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+                <path d="M5 11V7a2 2 0 0 1 2-2h4M21 5h4a2 2 0 0 1 2 2v4M27 21v4a2 2 0 0 1-2 2h-4M11 27H7a2 2 0 0 1-2-2v-4" stroke="#64d2ff" stroke-width="2.2" stroke-linecap="round"/>
+                <rect x="11.2" y="11.2" width="9.6" height="9.6" rx="2.4" transform="rotate(45 16 16)" fill="#5e5ce6" stroke="#ffffff" stroke-width="1.3"/>
+                <circle cx="16" cy="16" r="1.9" fill="#ffffff"/>
+              </svg>
+              <span class="logo-choice-title">HUD Reticle</span>
+              <span class="logo-choice-sub">Aviation lock-on target</span>
+            </button>
+
+            <button type="button" class="logo-choice" data-logo-choice="sliders">
+              <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+                <line x1="10" y1="6" x2="10" y2="26" stroke="#ffffff" stroke-opacity="0.28" stroke-width="2.2" stroke-linecap="round"/>
+                <line x1="10" y1="14" x2="10" y2="26" stroke="#64d2ff" stroke-width="2.4" stroke-linecap="round"/>
+                <circle cx="10" cy="12" r="3.6" fill="#0a84ff" stroke="#ffffff" stroke-width="1.5"/>
+                <line x1="22" y1="6" x2="22" y2="26" stroke="#ffffff" stroke-opacity="0.28" stroke-width="2.2" stroke-linecap="round"/>
+                <line x1="22" y1="19" x2="22" y2="26" stroke="#30d158" stroke-width="2.4" stroke-linecap="round"/>
+                <circle cx="22" cy="18" r="3.6" fill="#30d158" stroke="#ffffff" stroke-width="1.5"/>
+              </svg>
+              <span class="logo-choice-title">Control Faders</span>
+              <span class="logo-choice-sub">Tactile studio console</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="wa-row-2">
+          <div class="wa-field">
+            <label for="cfg-theme">Glass Material Theme</label>
+            <select id="cfg-theme" class="wa-input">
+              <option value="obsidian">Liquid Obsidian (Dark)</option>
+              <option value="sapphire">Midnight Sapphire (Blue)</option>
+              <option value="titanium">Graphite Titanium (Slate)</option>
+            </select>
+          </div>
+          <div class="wa-field">
+            <label for="cfg-popup-mode">Pop-Up Behavior</label>
+            <select id="cfg-popup-mode" class="wa-input">
+              <option value="needs_input">Only When Action Required</option>
+              <option value="urgent_and_review">Action + Turn Finished</option>
+              <option value="always">Always Visible</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="wa-row-2">
+          <div class="wa-field">
+            <label for="cfg-dock-side">macOS Dock Edge</label>
+            <select id="cfg-dock-side" class="wa-input">
+              <option value="right">Right Screen Edge</option>
+              <option value="left">Left Screen Edge</option>
+            </select>
+          </div>
+          <div class="wa-field">
+            <label for="cfg-panel-width">Panel Width</label>
+            <select id="cfg-panel-width" class="wa-input">
+              <option value="348">Compact (348 px)</option>
+              <option value="386" selected>Standard (386 px)</option>
+              <option value="436">Wide (436 px)</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="wa-toggle-row">
+          <span>Show 1-Click Custom Functions bar on agent cards</span>
+          <input type="checkbox" id="cfg-show-functions" checked />
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js?v=6" type="module"></script>
 </body>
 </html>

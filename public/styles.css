@@ -69,6 +69,26 @@ html.macos-panel body {
   background: rgba(16, 18, 24, 0.14) !important;
 }
 
+body[data-theme='sapphire'] {
+  --bg: radial-gradient(120% 100% at 50% 0%, #1a2a4a 0%, #0f172a 60%, #080d1a 100%);
+  --glass-card: linear-gradient(155deg, rgba(100, 210, 255, 0.16) 0%, rgba(10, 132, 255, 0.06) 100%);
+  --glass-card-hover: linear-gradient(155deg, rgba(100, 210, 255, 0.22) 0%, rgba(10, 132, 255, 0.10) 100%);
+}
+
+html.macos-panel body[data-theme='sapphire'] {
+  background: rgba(10, 22, 46, 0.22) !important;
+}
+
+body[data-theme='titanium'] {
+  --bg: radial-gradient(120% 100% at 50% 0%, #33363f 0%, #1f2127 60%, #141519 100%);
+  --glass-card: linear-gradient(155deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.08) 100%);
+  --glass-card-hover: linear-gradient(155deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.11) 100%);
+}
+
+html.macos-panel body[data-theme='titanium'] {
+  background: rgba(34, 36, 42, 0.20) !important;
+}
+
 button {
   font: inherit;
   color: inherit;
@@ -155,29 +175,90 @@ pre {
 .brand-left {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
 }
 
+.brand-logo-wrap {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.05) 100%);
+  border: 0.5px solid rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.30), 0 2px 8px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.15s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.brand-logo-wrap:hover {
+  transform: scale(1.05);
+  border-color: rgba(100, 210, 255, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 12px rgba(10, 132, 255, 0.35);
+}
+
+body[data-urgent='true'] .brand-logo-wrap {
+  border-color: rgba(255, 159, 10, 0.65);
+  box-shadow: 0 0 14px rgba(255, 69, 58, 0.45);
+}
+
+.brand-logo {
+  display: none;
+}
+
+body[data-logo='orbit'] .logo-orbit,
+body:not([data-logo]) .logo-orbit {
+  display: block;
+}
+
+body[data-logo='reticle'] .logo-reticle {
+  display: block;
+}
+
+body[data-logo='sliders'] .logo-sliders {
+  display: block;
+}
+
 .ws-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--apple-red);
+  border: 1.2px solid #12151f;
   flex-shrink: 0;
 }
 
 .ws-dot.connected {
   background: var(--apple-green);
-  box-shadow: 0 0 8px rgba(48, 209, 88, 0.75);
+  box-shadow: 0 0 6px rgba(48, 209, 88, 0.85);
+}
+
+.brand-title-stack {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.08;
 }
 
 .brand-title {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.018em;
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
   color: var(--text);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.brand-subtitle {
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
 }
 
 .urgent-pill {
@@ -1235,3 +1316,287 @@ html.macos-panel .panel-only-btn {
   gap: 7px;
   margin-top: 4px;
 }
+
+/* ---------- Card Aurora Progress & 1-Click Custom Function Chips ---------- */
+.agent-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-aurora-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #64d2ff, #0a84ff, #30d158, transparent);
+  background-size: 200% 100%;
+  animation: auroraSlide 2.6s linear infinite;
+}
+
+@keyframes auroraSlide {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.card-fn-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 0.5px solid rgba(255, 255, 255, 0.10);
+}
+
+.fn-chip {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.08);
+  border: 0.5px solid rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.22);
+  transition: background 0.14s, color 0.14s, border-color 0.14s, transform 0.1s;
+}
+
+.fn-chip:hover {
+  background: rgba(10, 132, 255, 0.22);
+  border-color: rgba(100, 210, 255, 0.45);
+  color: #ffffff;
+}
+
+.fn-chip:active,
+.fn-chip.running {
+  transform: scale(0.95);
+  opacity: 0.75;
+}
+
+.fn-chip-icon {
+  font-size: 10.5px;
+  line-height: 1;
+}
+
+.fn-chip-add {
+  color: var(--text-muted);
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* ---------- Customize Functions, Design & Logo Modal ---------- */
+.modal-card-wide {
+  max-width: 410px;
+}
+
+.settings-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: var(--segmented-track);
+  border: 0.5px solid var(--hairline);
+  margin-bottom: 10px;
+}
+
+.settings-tab {
+  height: 26px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--text-secondary);
+  transition: background 0.15s, color 0.15s;
+}
+
+.settings-tab.active {
+  background: var(--segmented-thumb);
+  color: var(--text);
+  box-shadow: var(--specular-pill), 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.settings-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.logo-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.logo-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 9px 6px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  text-align: center;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.logo-choice:hover {
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.logo-choice.active {
+  background: rgba(10, 132, 255, 0.18);
+  border-color: #409cff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 0 12px rgba(10, 132, 255, 0.25);
+}
+
+.logo-choice-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.logo-choice-sub {
+  font-size: 9px;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+.custom-functions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 195px;
+  overflow-y: auto;
+}
+
+.fn-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.06);
+  border: 0.5px solid var(--hairline);
+}
+
+.fn-item-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.fn-item-icon {
+  font-size: 14px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.fn-item-meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.fn-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.fn-item-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fn-type-badge {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(10, 132, 255, 0.22);
+  color: #7cc4ff;
+}
+
+.fn-type-badge.type-shell {
+  background: rgba(48, 209, 88, 0.20);
+  color: #6ce88b;
+}
+
+.fn-type-badge.type-webhook {
+  background: rgba(255, 159, 10, 0.22);
+  color: #ffc266;
+}
+
+.fn-item-payload {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fn-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.mini-icon-btn.active-pin {
+  background: rgba(48, 209, 88, 0.20);
+  color: #6ce88b;
+  border-color: rgba(48, 209, 88, 0.35);
+}
+
+.mini-icon-btn.danger-text:hover {
+  background: rgba(255, 69, 58, 0.25);
+  color: #ff8078;
+}
+
+.add-fn-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fn-form-row {
+  display: flex;
+  gap: 6px;
+}
+
+.fn-icon-select {
+  width: 52px;
+  flex-shrink: 0;
+  padding: 0 4px;
+  text-align: center;
+}
+
+.fn-type-select {
+  width: 108px;
+  flex-shrink: 0;
+}
+
+.fn-add-btn {
+  flex-shrink: 0;
+  padding: 0 12px;
+}
+

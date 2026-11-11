@@ -33,8 +33,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     var panel: SidePanel!
     var webView: PanelWebView!
     var statusItem: NSStatusItem!
+    var autoMenuItem: NSMenuItem?
     let hubURL: URL
-    var panelWidth: CGFloat = 376
+    var panelWidth: CGFloat = 386
+    var dockSide: String = "right"
     var autoPopupOnly: Bool = true
     var manuallyShown: Bool = false
     var hadUrgentAction: Bool = false
@@ -121,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         controller.addUserScript(script)
         controller.add(self, name: "badge")
         controller.add(self, name: "windowDrag")
+        controller.add(self, name: "panelConfig")
         config.userContentController = controller
 
         webView = PanelWebView(frame: visualEffect.bounds, configuration: config)
@@ -183,8 +186,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         guard let screen = NSScreen.main else { return }
         let f = screen.visibleFrame
         let margin: CGFloat = 8
+        let xPos = dockSide == "left" ? (f.minX + margin) : (f.maxX - panelWidth - margin)
         let frame = NSRect(
-            x: f.maxX - panelWidth - margin,
+            x: xPos,
             y: f.minY + margin,
             width: panelWidth,
             height: f.height - (margin * 2)
@@ -202,11 +206,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         panel.orderFrontRegardless()
     }
 
-    // MARK: Menu bar
+    // MARK: Menu bar & Custom Vector Logo Icon
+
+    func makeMenuBarIcon(urgent: Bool) -> NSImage {
+        let size = NSSize(width: 16, height: 16)
+        let img = NSImage(size: size, flipped: false) { _ in
+            let center = NSPoint(x: 8, y: 8)
+            let primaryColor = urgent
+                ? NSColor(calibratedRed: 1.0, green: 0.35, blue: 0.30, alpha: 1.0)
+                : NSColor(calibratedRed: 0.38, green: 0.82, blue: 1.0, alpha: 0.95)
+
+            // Outer orbit ring
+            let orbit = NSBezierPath()
+            orbit.appendArc(withCenter: center, radius: 6.2, startAngle: 25, endAngle: 315)
+            orbit.lineWidth = 1.4
+            orbit.lineCapStyle = .round
+            primaryColor.setStroke()
+            orbit.stroke()
+
+            // Central command core
+            let coreRect = NSRect(x: 5.7, y: 5.7, width: 4.6, height: 4.6)
+            let core = NSBezierPath(ovalIn: coreRect)
+            primaryColor.setFill()
+            core.fill()
+
+            // Satellite node at orbit tip
+            let satRect = NSRect(x: 11.4, y: 10.2, width: 3.0, height: 3.0)
+            let sat = NSBezierPath(ovalIn: satRect)
+            (urgent ? NSColor.systemOrange : NSColor.systemGreen).setFill()
+            sat.fill()
+            return true
+        }
+        img.isTemplate = false
+        return img
+    }
 
     func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "◉ InControl"
+        statusItem.button?.image = makeMenuBarIcon(urgent: false)
+        statusItem.button?.imagePosition = .imageLeading
+        statusItem.button?.title = " InControl"
         let menu = NSMenu()
         menu.addItem(withTitle: "Show / Hide Panel", action: #selector(togglePanel), keyEquivalent: "i")
         let autoItem = NSMenuItem(
@@ -215,8 +254,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             keyEquivalent: "a"
         )
         autoItem.state = autoPopupOnly ? .on : .off
+        self.autoMenuItem = autoItem
         menu.addItem(autoItem)
-        menu.addItem(withTitle: "Snap to Right Edge", action: #selector(dock), keyEquivalent: "d")
+        menu.addItem(withTitle: "Snap to Screen Edge", action: #selector(dock), keyEquivalent: "d")
         let pin = NSMenuItem(title: "Float Above Windows", action: #selector(togglePin(_:)), keyEquivalent: "t")
         pin.state = .on
         menu.addItem(pin)
@@ -259,6 +299,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     @objc func openBrowser() { NSWorkspace.shared.open(hubURL) }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "panelConfig", let dict = message.body as? [String: Any] {
+            var geometryChanged = false
+            if let side = dict["dockSide"] as? String, side != dockSide {
+                dockSide = side
+                geometryChanged = true
+            }
+            if let w = dict["panelWidth"] as? CGFloat, abs(w - panelWidth) > 1 {
+                panelWidth = w
+                geometryChanged = true
+            }
+            if let mode = dict["popupMode"] as? String {
+                let shouldAutoOnly = (mode != "always")
+                if shouldAutoOnly != autoPopupOnly {
+                    autoPopupOnly = shouldAutoOnly
+                    autoMenuItem?.state = autoPopupOnly ? .on : .off
+                    if !autoPopupOnly && !panel.isVisible {
+                        panel.orderFrontRegardless()
+                    } else if autoPopupOnly && !hadUrgentAction && !manuallyShown && panel.isVisible {
+                        panel.orderOut(nil)
+                    }
+                }
+            }
+            if geometryChanged {
+                positionDockFrame(animate: true)
+            }
+            return
+        }
+
         if message.name == "windowDrag" {
             let cmd = (message.body as? String) ?? "drag"
             if cmd == "dock" {
@@ -275,13 +343,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         guard let title = message.body as? String else { return }
         if let open = title.firstIndex(of: "("), let close = title.firstIndex(of: ")"), open < close {
             let count = title[title.index(after: open)..<close]
-            statusItem.button?.title = "🔴 \(count) InControl"
+            statusItem.button?.image = makeMenuBarIcon(urgent: true)
+            statusItem.button?.title = " \(count) InControl"
             hadUrgentAction = true
             if !panel.isVisible {
                 panel.orderFrontRegardless()
             }
         } else {
-            statusItem.button?.title = "◉ InControl"
+            statusItem.button?.image = makeMenuBarIcon(urgent: false)
+            statusItem.button?.title = " InControl"
             if hadUrgentAction {
                 hadUrgentAction = false
                 manuallyShown = false

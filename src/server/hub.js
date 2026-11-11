@@ -21,6 +21,11 @@ import {
   handleIncomingWhatsAppReply,
 } from './whatsapp.js';
 import {
+  loadUserSettings,
+  saveUserSettings,
+  executeCustomFunction,
+} from './settings.js';
+import {
   loadOrCreateToken,
   checkOrigin,
   isAuthorized,
@@ -31,7 +36,7 @@ import {
 } from './auth.js';
 
 // Static files that may be served before pairing (no secrets in them).
-const PUBLIC_ASSETS = new Set(['/manifest.json', '/styles.css', '/app.js']);
+const PUBLIC_ASSETS = new Set(['/manifest.json', '/styles.css', '/app.js', '/icon.svg']);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -298,6 +303,33 @@ export async function createInControlHub(options = {}) {
         return sendJson(res, result.ok ? 200 : 400, result);
       }
 
+      // 10b. GET/POST /api/settings & POST /api/agents/:id/function — User customization & custom functions
+      if (req.method === 'GET' && pathname === '/api/settings') {
+        return sendJson(res, 200, { ok: true, settings: loadUserSettings() });
+      }
+
+      if (req.method === 'POST' && pathname === '/api/settings') {
+        const body = await readJsonBody(req);
+        const updated = saveUserSettings(body);
+        broadcast({
+          type: 'state_sync',
+          state: buildFullState(store, network, qrSvg),
+        });
+        return sendJson(res, 200, {
+          ok: true,
+          message: 'Saved InControl settings',
+          settings: updated,
+        });
+      }
+
+      const fnMatch = pathname.match(/^\/api\/agents\/([^/]+)\/function$/);
+      if (req.method === 'POST' && fnMatch) {
+        const agentId = decodeURIComponent(fnMatch[1]);
+        const body = await readJsonBody(req);
+        const result = await executeCustomFunction(store, agentId, body.functionId);
+        return sendJson(res, result.ok ? 200 : 400, result);
+      }
+
       // 11. Static file serving (Web UI / PWA)
       let filePath = pathname === '/' ? path.join(PUBLIC_DIR, 'index.html') : path.join(PUBLIC_DIR, pathname);
       // Prevent directory traversal (including sibling-prefix paths)
@@ -418,6 +450,7 @@ function buildFullState(store, network, qrSvg) {
     counts: store.getSummaryCounts(),
     integrations: getIntegrationsStatus(),
     whatsapp: getPublicWhatsAppStatus(),
+    settings: loadUserSettings(),
     network,
     qrSvg,
     globalEvents: store.globalEvents.slice(0, 25),
