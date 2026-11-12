@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="manifest" href="/manifest.json" />
   <title>InControl</title>
-  <link rel="stylesheet" href="/styles.css?v=7" />
+  <link rel="stylesheet" href="/styles.css?v=8" />
 </head>
 <body data-theme="obsidian" data-logo="orbit">
   <div class="app-shell">
@@ -59,33 +59,15 @@
           </div>
           <div class="brand-title-stack">
             <span class="brand-title">InControl</span>
-            <span class="brand-subtitle">Mission Control</span>
           </div>
           <span id="urgent-pill" class="urgent-pill hidden">0 waiting</span>
         </div>
         <div class="brand-actions">
-          <button id="btn-settings" class="icon-btn" title="Customize functions, appearance & logo" aria-label="Customize & Functions">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
-          </button>
-          <button id="btn-sound" class="icon-btn" title="Toggle sound alerts" aria-label="Toggle Sound">
-            <svg id="icon-sound-on" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            <svg id="icon-sound-off" class="hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-          </button>
-          <button id="btn-whatsapp" class="icon-btn" title="WhatsApp auto-escalation when unanswered" aria-label="WhatsApp Escalation">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-          </button>
-          <button id="btn-project" class="icon-btn" title="Pair iPhone or iPad (QR)" aria-label="Pair Device">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5" ry="2.5"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-          </button>
-          <button id="btn-connect" class="connect-btn" title="Connect an agent or IDE">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            <span>Connect</span>
-          </button>
           <button id="btn-tile-panel" class="icon-btn panel-only-btn" title="Snap to edge & fit active page beside panel" aria-label="Fit Page Beside Panel">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
           </button>
           <button id="btn-hide-panel" class="icon-btn panel-only-btn" title="Hide panel until action is required" aria-label="Hide Panel">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
         </div>
       </div>
@@ -117,15 +99,75 @@
     <!-- Main Agent Feed -->
     <main id="agent-list" class="agent-list" aria-live="polite"></main>
 
-    <!-- Minimal Activity Footer -->
+    <!-- Bottom Command Dock & Collapsible Activity / Advanced Drawers -->
     <footer class="bottom-bar">
-      <button class="bottom-bar-header" id="toggle-activity" type="button">
-        <span class="activity-dot"></span>
-        <span id="last-event-preview" class="last-event-preview">Listening for agent activity…</span>
-        <svg id="activity-chevron" class="chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
-      </button>
+      <!-- Advanced Tools & Settings Drawer (expands from bottom bar) -->
+      <div id="advanced-drawer" class="advanced-drawer hidden">
+        <div class="adv-drawer-grid">
+          <button id="btn-settings" class="adv-menu-item" type="button">
+            <span class="adv-item-left">
+              <span class="adv-item-icon">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+              </span>
+              <span>Customize & Functions</span>
+            </span>
+            <span class="adv-item-badge">Edit</span>
+          </button>
+
+          <button id="btn-project" class="adv-menu-item" type="button">
+            <span class="adv-item-left">
+              <span class="adv-item-icon">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5" ry="2.5"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+              </span>
+              <span>Pair iPhone / iPad</span>
+            </span>
+            <span class="adv-item-badge">QR</span>
+          </button>
+
+          <button id="btn-whatsapp" class="adv-menu-item" type="button">
+            <span class="adv-item-left">
+              <span class="adv-item-icon">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              </span>
+              <span>WhatsApp Escalation</span>
+            </span>
+            <span id="wa-menu-badge" class="adv-item-badge">Off</span>
+          </button>
+
+          <button id="btn-sound" class="adv-menu-item" type="button">
+            <span class="adv-item-left">
+              <span class="adv-item-icon">
+                <svg id="icon-sound-on" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <svg id="icon-sound-off" class="hidden" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </span>
+              <span>Sound Alerts</span>
+            </span>
+            <span id="sound-menu-badge" class="adv-item-badge active">On</span>
+          </button>
+        </div>
+      </div>
+
       <div id="activity-drawer" class="activity-drawer hidden">
         <ul id="activity-log" class="activity-log"></ul>
+      </div>
+
+      <div class="bottom-bar-row">
+        <button class="bottom-bar-header" id="toggle-activity" type="button" title="Toggle live activity log">
+          <span class="activity-dot"></span>
+          <span id="last-event-preview" class="last-event-preview">Listening for agent activity…</span>
+          <svg id="activity-chevron" class="chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+        </button>
+
+        <div class="bottom-bar-actions">
+          <button id="btn-connect" class="bottom-pill primary" type="button" title="Connect an agent or IDE">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Connect</span>
+          </button>
+          <button id="btn-advanced" class="bottom-pill" type="button" title="Advanced settings, pairing & alerts">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+            <span>Advanced</span>
+          </button>
+        </div>
       </div>
     </footer>
   </div>
@@ -436,6 +478,6 @@ incontrol wrap --name "Aider" -- aider</pre>
     </div>
   </div>
 
-  <script src="/app.js?v=7" type="module"></script>
+  <script src="/app.js?v=8" type="module"></script>
 </body>
 </html>

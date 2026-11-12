@@ -22,6 +22,7 @@ let reconnectDelay = 500;
 let soundOn = localStorage.getItem('incontrol.sound') !== 'off';
 let lastInputIds = new Set();
 const expandedLogs = new Set();
+const expandedCardAdvanced = new Set();
 const draftReplies = new Map();
 
 // ---------------- WebSocket ----------------
@@ -116,9 +117,14 @@ function applySettingsToUI() {
 
 function renderWhatsAppStatus() {
   const btn = $('#btn-whatsapp');
-  if (!btn) return;
   const wa = state.whatsapp || {};
-  btn.classList.toggle('wa-active', Boolean(wa.enabled));
+  const active = Boolean(wa.enabled);
+  if (btn) btn.classList.toggle('wa-active', active);
+  const badge = $('#wa-menu-badge');
+  if (badge) {
+    badge.textContent = active ? 'On' : 'Off';
+    badge.classList.toggle('active', active);
+  }
 }
 
 function renderIntegrations() {
@@ -397,20 +403,31 @@ function renderFunctionBar(a) {
   const s = state.settings || {};
   if (s.showFunctionBar === false) return '';
   const fns = (s.customFunctions || []).filter((f) => f.pinned !== false);
-  const chips = fns
-    .map(
-      (f) =>
-        `<button type="button" class="fn-chip" data-act="run-function" data-agent="${esc(a.id)}" data-fn="${esc(f.id)}" title="${esc(f.type.toUpperCase())}: ${esc(f.payload)}">
-          <span class="fn-chip-icon">${renderFunctionIconHtml(f, a)}</span>
-          <span>${esc(f.label)}</span>
-        </button>`
-    )
-    .join('');
+  if (fns.length === 0) return '';
+
+  const isExpanded = expandedCardAdvanced.has(a.id);
+  const primaryFns = fns.slice(0, 2);
+  const extraFns = fns.slice(2);
+
+  const renderChip = (f) =>
+    `<button type="button" class="fn-chip" data-act="run-function" data-agent="${esc(a.id)}" data-fn="${esc(f.id)}" title="${esc(f.type.toUpperCase())}: ${esc(f.payload)}">
+      <span class="fn-chip-icon">${renderFunctionIconHtml(f, a)}</span>
+      <span>${esc(f.label)}</span>
+    </button>`;
+
+  const primaryHtml = primaryFns.map(renderChip).join('');
+  const extraHtml = isExpanded
+    ? `${extraFns.map(renderChip).join('')}
+       <button type="button" class="fn-chip fn-chip-add" data-act="open-settings" title="Add or customize functions">+ Customize</button>`
+    : '';
 
   return `
     <div class="card-fn-bar">
-      ${chips}
-      <button type="button" class="fn-chip fn-chip-add" data-act="open-settings" title="Add or customize functions">+ Function</button>
+      ${primaryHtml}
+      ${extraHtml}
+      <button type="button" class="fn-chip fn-chip-more ${isExpanded ? 'open' : ''}" data-act="toggle-card-advanced" data-agent="${esc(a.id)}" title="Show more functions">
+        <span>${isExpanded ? 'Less' : 'Advanced'}</span>
+      </button>
     </div>`;
 }
 
@@ -467,8 +484,13 @@ function chime() {
 }
 
 function syncSoundIcons() {
-  $('#icon-sound-on').classList.toggle('hidden', !soundOn);
-  $('#icon-sound-off').classList.toggle('hidden', soundOn);
+  $('#icon-sound-on')?.classList.toggle('hidden', !soundOn);
+  $('#icon-sound-off')?.classList.toggle('hidden', soundOn);
+  const badge = $('#sound-menu-badge');
+  if (badge) {
+    badge.textContent = soundOn ? 'On' : 'Off';
+    badge.classList.toggle('active', soundOn);
+  }
 }
 syncSoundIcons();
 
@@ -526,6 +548,11 @@ document.addEventListener('click', async (e) => {
       return focusAgent(agentId);
     case 'toggle-log':
       expandedLogs.has(agentId) ? expandedLogs.delete(agentId) : expandedLogs.add(agentId);
+      return renderAgents();
+    case 'toggle-card-advanced':
+      expandedCardAdvanced.has(agentId)
+        ? expandedCardAdvanced.delete(agentId)
+        : expandedCardAdvanced.add(agentId);
       return renderAgents();
     case 'open-connect':
       return $('#modal-connect').classList.remove('hidden');
@@ -596,6 +623,8 @@ document.addEventListener('input', (e) => {
 });
 
 $('#btn-project').addEventListener('click', () => {
+  $('#advanced-drawer')?.classList.add('hidden');
+  $('#btn-advanced')?.classList.remove('active');
   const n = state.network || {};
   $('#qr-container').innerHTML = state.qrSvg || '';
   $('#url-primary').textContent = n.pairingUrl || n.primaryProjectionUrl || location.origin;
@@ -606,10 +635,27 @@ $('#btn-project').addEventListener('click', () => {
   $('#modal-project').classList.remove('hidden');
 });
 
-$('#btn-connect').addEventListener('click', () => $('#modal-connect').classList.remove('hidden'));
+$('#btn-connect').addEventListener('click', () => {
+  $('#advanced-drawer')?.classList.add('hidden');
+  $('#btn-advanced')?.classList.remove('active');
+  $('#modal-connect').classList.remove('hidden');
+});
 $('#btn-settings')?.addEventListener('click', () => {
+  $('#advanced-drawer')?.classList.add('hidden');
+  $('#btn-advanced')?.classList.remove('active');
   renderCustomFunctionsList();
   $('#modal-settings').classList.remove('hidden');
+});
+$('#btn-advanced')?.addEventListener('click', () => {
+  const drawer = $('#advanced-drawer');
+  if (!drawer) return;
+  const willOpen = drawer.classList.contains('hidden');
+  drawer.classList.toggle('hidden', !willOpen);
+  $('#btn-advanced')?.classList.toggle('active', willOpen);
+  if (willOpen) {
+    $('#activity-drawer')?.classList.add('hidden');
+    $('#activity-chevron')?.classList.remove('open');
+  }
 });
 $('#brand-logo-trigger')?.addEventListener('click', () => {
   renderCustomFunctionsList();
@@ -733,6 +779,8 @@ function populateWhatsAppForm() {
 }
 
 $('#btn-whatsapp')?.addEventListener('click', () => {
+  $('#advanced-drawer')?.classList.add('hidden');
+  $('#btn-advanced')?.classList.remove('active');
   populateWhatsAppForm();
   $('#modal-whatsapp').classList.remove('hidden');
 });
@@ -808,8 +856,13 @@ $('#btn-sound').addEventListener('click', () => {
 });
 
 $('#toggle-activity').addEventListener('click', () => {
-  $('#activity-drawer').classList.toggle('hidden');
-  $('#activity-chevron').classList.toggle('open');
+  const willOpen = $('#activity-drawer').classList.contains('hidden');
+  $('#activity-drawer').classList.toggle('hidden', !willOpen);
+  $('#activity-chevron').classList.toggle('open', willOpen);
+  if (willOpen) {
+    $('#advanced-drawer')?.classList.add('hidden');
+    $('#btn-advanced')?.classList.remove('active');
+  }
 });
 
 document.addEventListener('keydown', (e) => {
