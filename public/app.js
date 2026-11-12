@@ -43,7 +43,7 @@ function connect() {
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
     if (msg.type === 'state_sync') {
-      state = msg.state;
+      state = DEMO_MODE ? applyDemoState(msg.state) : msg.state;
       render();
     } else if (msg.type === 'notification') {
       onNotification(msg.notification);
@@ -59,7 +59,199 @@ function send(payload) {
   return false;
 }
 
+// ---------------- Demo Mode (fictional projects for screenshots / posts) ----------------
+// Enable with ?demo=1 or via Advanced → Demo Mode. Never sends anything to real agents.
+const DEMO_MODE =
+  new URLSearchParams(location.search).get('demo') === '1' ||
+  localStorage.getItem('incontrol.demo') === 'on';
+const demoResolved = new Map();
+
+function demoIcon(bg1, bg2, glyph) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${bg1}"/><stop offset="1" stop-color="${bg2}"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g)"/>${glyph}</svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+const DEMO_ICONS = {
+  nova: demoIcon('#ff7a59', '#ff3d7f', '<path d="M18 40c6-14 22-14 28 0" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="32" cy="24" r="6" fill="#fff"/>'),
+  atlas: demoIcon('#34c3ff', '#4a5cff', '<circle cx="32" cy="32" r="14" stroke="#fff" stroke-width="4.5" fill="none"/><path d="M18 32h28M32 18c6 8 6 20 0 28M32 18c-6 8-6 20 0 28" stroke="#fff" stroke-width="3" fill="none"/>'),
+  orbit: demoIcon('#8e5cff', '#3b1fa8', '<circle cx="32" cy="32" r="7" fill="#fff"/><ellipse cx="32" cy="32" rx="20" ry="9" stroke="#fff" stroke-width="3.5" fill="none" transform="rotate(-25 32 32)"/>'),
+  pulse: demoIcon('#2fe08a', '#0b9e6a', '<path d="M12 34h10l5-12 8 22 5-10h12" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'),
+  lumen: demoIcon('#ffd34d', '#ff9f0a', '<path d="M32 14l4 12h12l-10 7 4 12-10-7-10 7 4-12-10-7h12z" fill="#fff"/>'),
+  harbor: demoIcon('#5f7a99', '#2c3e57', '<path d="M32 16v30M22 26h20M18 38c4 8 24 8 28 0" stroke="#fff" stroke-width="4.5" fill="none" stroke-linecap="round"/>'),
+};
+
+function buildDemoAgents() {
+  const now = Date.now();
+  const tool = (k) => `/api/icons/tool/${k}`;
+  const log = (minsAgo, message) => ({ timestamp: now - minsAgo * 60_000, message });
+  const agents = [
+    {
+      id: 'demo-nova',
+      name: 'Claude Code',
+      provider: 'claude-code',
+      toolKey: 'claude',
+      ide: 'Terminal',
+      workspace: '~/dev/nova-checkout',
+      projectName: 'Nova Checkout',
+      branch: 'feat/stripe-v3',
+      status: 'needs_input',
+      currentTask: 'Migrate payments to Stripe API v3',
+      currentStep: 'Waiting for approval to run migration',
+      pendingPrompt: {
+        requestId: 'demo-req-nova',
+        question: 'Allow Claude to run the database migration on staging?',
+        command: 'npm run db:migrate -- --env=staging',
+        allowFreeText: true,
+        options: [
+          { id: 'approve', label: 'Approve', style: 'primary' },
+          { id: 'deny', label: 'Deny', style: 'danger' },
+        ],
+      },
+      metrics: { updatedAt: now - 20_000 },
+      logs: [log(1, 'Generated migration 0042_stripe_v3.sql'), log(3, 'Updated checkout webhooks')],
+      toolIconUrl: tool('claude'),
+      projectIconUrl: DEMO_ICONS.nova,
+    },
+    {
+      id: 'demo-atlas',
+      name: 'ChatGPT / Codex',
+      provider: 'codex',
+      toolKey: 'chatgpt',
+      ide: 'ChatGPT App',
+      workspace: '~/dev/atlas-mobile',
+      projectName: 'Atlas Mobile',
+      branch: 'release/2.4',
+      status: 'needs_input',
+      currentTask: 'Prepare iOS release 2.4.0',
+      currentStep: 'Waiting for your confirmation in ChatGPT App',
+      pendingPrompt: {
+        requestId: 'demo-req-atlas',
+        question: 'Confirm that you want me to upload build 2.4.0 (312) to TestFlight now.',
+        details: 'All 148 tests pass. Changelog and screenshots are ready.',
+        allowFreeText: true,
+        options: [
+          { id: 'quick_reply', label: 'Confirm Upload', style: 'primary', replyText: 'Confirmed, upload it.' },
+          { id: 'dismiss', label: 'Not now', style: 'secondary' },
+        ],
+      },
+      metrics: { updatedAt: now - 75_000 },
+      logs: [log(2, 'Bumped version to 2.4.0 (312)'), log(6, 'Archived Release build')],
+      toolIconUrl: tool('chatgpt'),
+      projectIconUrl: DEMO_ICONS.atlas,
+    },
+    {
+      id: 'demo-orbit',
+      name: 'Antigravity',
+      provider: 'antigravity',
+      toolKey: 'antigravity',
+      ide: 'Antigravity',
+      workspace: '~/dev/orbit-analytics',
+      projectName: 'Orbit Analytics',
+      branch: 'design/dashboard-v2',
+      status: 'needs_attention',
+      currentTask: 'Redesign the analytics dashboard with live charts',
+      currentStep: 'Completed · 12 files changed',
+      attentionReason: 'Dashboard redesign finished — ready for your review',
+      metrics: { updatedAt: now - 3 * 60_000 },
+      logs: [log(3, 'Verified charts in browser preview'), log(9, 'Added realtime WebSocket feed')],
+      toolIconUrl: tool('antigravity'),
+      projectIconUrl: DEMO_ICONS.orbit,
+    },
+    {
+      id: 'demo-pulse',
+      name: 'Cursor',
+      provider: 'cursor',
+      toolKey: 'cursor',
+      ide: 'Cursor',
+      workspace: '~/dev/pulse-api',
+      projectName: 'Pulse API',
+      branch: 'refactor/auth',
+      status: 'working',
+      currentTask: 'Refactor auth middleware to support passkeys',
+      currentStep: 'Editing src/middleware/auth.ts',
+      metrics: { updatedAt: now - 8_000 },
+      logs: [log(0.2, 'Editing src/middleware/auth.ts'), log(2, 'Added WebAuthn verification')],
+      toolIconUrl: tool('cursor'),
+      projectIconUrl: DEMO_ICONS.pulse,
+    },
+    {
+      id: 'demo-lumen',
+      name: 'Codex',
+      provider: 'codex',
+      toolKey: 'codex',
+      ide: 'Codex CLI',
+      workspace: '~/dev/lumen-docs',
+      projectName: 'Lumen Docs',
+      branch: 'main',
+      status: 'working',
+      currentTask: 'Generate API reference from OpenAPI spec',
+      currentStep: 'Writing docs/reference/webhooks.md',
+      metrics: { updatedAt: now - 30_000 },
+      logs: [log(0.5, 'Writing docs/reference/webhooks.md')],
+      toolIconUrl: tool('codex'),
+      projectIconUrl: DEMO_ICONS.lumen,
+    },
+    {
+      id: 'demo-harbor',
+      name: 'Claude Code',
+      provider: 'claude-code',
+      toolKey: 'claude',
+      ide: 'VS Code',
+      workspace: '~/dev/harbor-infra',
+      projectName: 'Harbor Infra',
+      branch: 'main',
+      status: 'idle',
+      currentTask: 'Terraform plan for EU region',
+      currentStep: 'Idle',
+      metrics: { updatedAt: now - 42 * 60_000 },
+      logs: [],
+      toolIconUrl: tool('claude'),
+      projectIconUrl: DEMO_ICONS.harbor,
+    },
+  ];
+  // Apply locally-resolved demo interactions
+  return agents.map((a) => {
+    const r = demoResolved.get(a.id);
+    return r ? { ...a, ...r, pendingPrompt: null } : a;
+  });
+}
+
+function applyDemoState(real) {
+  const agents = buildDemoAgents();
+  const rank = { needs_input: 0, needs_attention: 1, working: 2, idle: 3 };
+  agents.sort((a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9));
+  const counts = { total: agents.length, needs_input: 0, needs_attention: 0, working: 0, idle: 0 };
+  agents.forEach((a) => (counts[a.status] = (counts[a.status] || 0) + 1));
+  const now = Date.now();
+  return {
+    ...real,
+    agents,
+    counts,
+    globalEvents: [
+      { timestamp: now - 8_000, agentName: 'Cursor', projectName: 'Pulse API', message: 'Editing src/middleware/auth.ts' },
+      { timestamp: now - 20_000, agentName: 'Claude Code', projectName: 'Nova Checkout', message: 'Requested approval: db:migrate' },
+      { timestamp: now - 75_000, agentName: 'ChatGPT / Codex', projectName: 'Atlas Mobile', message: 'Waiting for TestFlight confirmation' },
+      { timestamp: now - 180_000, agentName: 'Antigravity', projectName: 'Orbit Analytics', message: 'Task finished — ready for review' },
+    ],
+  };
+}
+
+function demoRespond(agentId, action) {
+  if (action === 'dismiss' || action === 'deny') {
+    demoResolved.set(agentId, { status: 'idle', currentStep: 'Idle' });
+  } else {
+    demoResolved.set(agentId, { status: 'working', currentStep: 'Continuing after your approval…' });
+  }
+  state = applyDemoState(state);
+  render();
+}
+
 async function respond(agentId, action, text = '') {
+  if (DEMO_MODE) {
+    demoRespond(agentId, action);
+    toast(action === 'reply' ? 'Reply sent (demo)' : `Sent: ${action} (demo)`);
+    return;
+  }
   const payload = { action, text, sourceDevice: DEVICE_NAME };
   if (!send({ type: 'respond', agentId, ...payload })) {
     await fetch(`/api/agents/${encodeURIComponent(agentId)}/respond`, {
@@ -73,6 +265,7 @@ async function respond(agentId, action, text = '') {
 }
 
 async function focusAgent(agentId) {
+  if (DEMO_MODE) return toast('Focused window (demo)');
   const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/focus`, { method: 'POST' });
   const data = await res.json().catch(() => ({}));
   toast(data.ok ? `Focused ${data.appName}` : data.reason || 'Could not focus window');
@@ -561,6 +754,10 @@ document.addEventListener('click', async (e) => {
       return $('#modal-settings').classList.remove('hidden');
     case 'run-function': {
       const fnId = el.dataset.fn;
+      if (DEMO_MODE) {
+        const fn = (state.settings?.customFunctions || []).find((f) => f.id === fnId);
+        return toast(`Sent "${fn?.label || 'function'}" (demo)`);
+      }
       el.classList.add('running');
       const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/function`, {
         method: 'POST',
@@ -854,6 +1051,17 @@ $('#btn-sound').addEventListener('click', () => {
   if (soundOn) chime();
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
 });
+
+$('#btn-demo')?.addEventListener('click', () => {
+  localStorage.setItem('incontrol.demo', DEMO_MODE ? 'off' : 'on');
+  const url = new URL(location.href);
+  url.searchParams.delete('demo');
+  location.replace(url.toString());
+});
+if ($('#demo-menu-badge')) {
+  $('#demo-menu-badge').textContent = DEMO_MODE ? 'On' : 'Off';
+  $('#demo-menu-badge').classList.toggle('active', DEMO_MODE);
+}
 
 $('#toggle-activity').addEventListener('click', () => {
   const willOpen = $('#activity-drawer').classList.contains('hidden');

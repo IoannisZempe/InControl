@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="manifest" href="/manifest.json" />
   <title>InControl</title>
-  <link rel="stylesheet" href="/styles.css?v=8" />
+  <link rel="stylesheet" href="/styles.css?v=9" />
 </head>
 <body data-theme="obsidian" data-logo="orbit">
   <div class="app-shell">
@@ -143,6 +143,16 @@
               <span>Sound Alerts</span>
             </span>
             <span id="sound-menu-badge" class="adv-item-badge active">On</span>
+          </button>
+
+          <button id="btn-demo" class="adv-menu-item" type="button" title="Show fictional projects for screenshots — hides your real projects">
+            <span class="adv-item-left">
+              <span class="adv-item-icon">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              </span>
+              <span>Demo Mode</span>
+            </span>
+            <span id="demo-menu-badge" class="adv-item-badge">Off</span>
           </button>
         </div>
       </div>
@@ -478,6 +488,6 @@ incontrol wrap --name "Aider" -- aider</pre>
     </div>
   </div>
 
-  <script src="/app.js?v=8" type="module"></script>
+  <script src="/app.js?v=9" type="module"></script>
 </body>
 </html>
