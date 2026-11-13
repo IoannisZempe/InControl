@@ -331,8 +331,6 @@ function applySettingsToUI() {
       rwLink.classList.add('hidden');
     }
   }
-    ahBadge.classList.toggle('active', hkOn);
-  }
 
   // Sync native macOS panel geometry & pop-up mode
   window.webkit?.messageHandlers?.panelConfig?.postMessage({

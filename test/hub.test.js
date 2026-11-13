@@ -494,3 +494,10 @@ test('daily context archive: captures events & git commits and syncs by day to R
     fs.rmSync(tmpRepo, { recursive: true, force: true });
   }
 });
+
+test('client scripts: all browser modules parse with valid JavaScript syntax', async () => {
+  const { execFileSync } = await import('node:child_process');
+  for (const file of ['public/app.js', 'public/homeview.js']) {
+    execFileSync(process.execPath, ['--check', file]);
+  }
+});
