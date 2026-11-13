@@ -314,6 +314,7 @@ function applySettingsToUI() {
     dockSide: s.dockSide || 'right',
     panelWidth: Number(s.panelWidth || 386),
     popupMode: s.popupMode || 'needs_input',
+    demoMode: Boolean(DEMO_MODE),
   });
 }
 

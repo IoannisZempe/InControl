@@ -40,10 +40,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     let hubURL: URL
     var panelWidth: CGFloat = 386
     var dockSide: String = "right"
+    var popupMode: String = "needs_input"
     var autoPopupOnly: Bool = true
     var autoTileBesidePanel: Bool = true
+    var demoMode: Bool = false
     var manuallyShown: Bool = false
     var hadUrgentAction: Bool = false
+    var lastUrgentSignature: String = ""
+    var statePollTimer: Timer?
     var lastHubSpawnAttempt: Date = .distantPast
 
     init(hubURL: URL) {
@@ -58,9 +62,93 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         positionDockFrame(animate: false)
         // Stay hidden in menu bar by default; only pop up when an agent requires user action
         panel.orderOut(nil)
+        startStatePoller()
         NotificationCenter.default.addObserver(
             self, selector: #selector(handleScreenChange),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
+    }
+
+    /// Native loopback poller so auto-popup works instantaneously even while WKWebView is hidden (ordered out).
+    func startStatePoller() {
+        statePollTimer?.invalidate()
+        pollHubState()
+        statePollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            self?.pollHubState()
+        }
+    }
+
+    func pollHubState() {
+        if demoMode { return }
+        guard let stateURL = URL(string: "/api/state", relativeTo: hubURL) else { return }
+        var req = URLRequest(url: stateURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 1.5)
+        req.httpMethod = "GET"
+        URLSession.shared.dataTask(with: req) { [weak self] data, response, _ in
+            guard let self = self,
+                  let http = response as? HTTPURLResponse, http.statusCode == 200,
+                  let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return
+            }
+            let counts = json["counts"] as? [String: Any] ?? [:]
+            let settings = json["settings"] as? [String: Any] ?? [:]
+            let agents = json["agents"] as? [[String: Any]] ?? []
+            let mode = (settings["popupMode"] as? String) ?? self.popupMode
+            let needsInput = (counts["needs_input"] as? Int) ?? 0
+            let needsAttention = (counts["needs_attention"] as? Int) ?? 0
+            let actionCount = (mode == "urgent_and_review") ? (needsInput + needsAttention) : needsInput
+
+            let urgentKeys: [String] = agents.compactMap { a in
+                let st = a["status"] as? String ?? ""
+                let isUrgent = (mode == "urgent_and_review")
+                    ? (st == "needs_input" || st == "needs_attention")
+                    : (st == "needs_input")
+                guard isUrgent else { return nil }
+                let id = a["id"] as? String ?? ""
+                let prompt = a["pendingPrompt"] as? [String: Any]
+                let reqId = prompt?["requestId"] as? String ?? st
+                return "\(id):\(reqId)"
+            }
+            let signature = urgentKeys.sorted().joined(separator: "|")
+
+            DispatchQueue.main.async {
+                self.popupMode = mode
+                let shouldAutoOnly = (mode != "always")
+                if shouldAutoOnly != self.autoPopupOnly {
+                    self.autoPopupOnly = shouldAutoOnly
+                    self.autoMenuItem?.state = shouldAutoOnly ? .on : .off
+                }
+                if !shouldAutoOnly && !self.panel.isVisible {
+                    self.panel.orderFrontRegardless()
+                }
+                self.applyUrgentState(count: actionCount, signature: signature)
+            }
+        }.resume()
+    }
+
+    func applyUrgentState(count: Int, signature: String) {
+        if count > 0 {
+            let isNewRequest = !hadUrgentAction || (!signature.isEmpty && signature != lastUrgentSignature)
+            statusItem.button?.image = makeMenuBarIcon(urgent: true)
+            statusItem.button?.title = " \(count) InControl"
+            hadUrgentAction = true
+            if !signature.isEmpty {
+                lastUrgentSignature = signature
+            }
+            if !panel.isVisible || isNewRequest {
+                panel.orderFrontRegardless()
+            }
+        } else {
+            statusItem.button?.image = makeMenuBarIcon(urgent: false)
+            statusItem.button?.title = " InControl"
+            if hadUrgentAction {
+                hadUrgentAction = false
+                lastUrgentSignature = ""
+                manuallyShown = false
+            }
+            if autoPopupOnly && !manuallyShown && panel.isVisible {
+                panel.orderOut(nil)
+            }
+        }
     }
 
     // MARK: Panel
@@ -441,7 +529,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                 panelWidth = w
                 geometryChanged = true
             }
+            if let demo = dict["demoMode"] as? Bool {
+                demoMode = demo
+            }
             if let mode = dict["popupMode"] as? String {
+                popupMode = mode
                 let shouldAutoOnly = (mode != "always")
                 if shouldAutoOnly != autoPopupOnly {
                     autoPopupOnly = shouldAutoOnly
@@ -480,24 +572,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         }
 
         guard let title = message.body as? String else { return }
-        if let open = title.firstIndex(of: "("), let close = title.firstIndex(of: ")"), open < close {
-            let count = title[title.index(after: open)..<close]
-            statusItem.button?.image = makeMenuBarIcon(urgent: true)
-            statusItem.button?.title = " \(count) InControl"
-            hadUrgentAction = true
-            if !panel.isVisible {
-                panel.orderFrontRegardless()
-            }
-        } else {
+        if let open = title.firstIndex(of: "("), let close = title.firstIndex(of: ")"), open < close,
+           let count = Int(title[title.index(after: open)..<close]), count > 0 {
+            applyUrgentState(count: count, signature: lastUrgentSignature)
+        } else if demoMode {
+            applyUrgentState(count: 0, signature: "")
+        } else if !hadUrgentAction {
             statusItem.button?.image = makeMenuBarIcon(urgent: false)
             statusItem.button?.title = " InControl"
-            if hadUrgentAction {
-                hadUrgentAction = false
-                manuallyShown = false
-            }
-            if autoPopupOnly && !manuallyShown && panel.isVisible {
-                panel.orderOut(nil)
-            }
         }
     }
 }
