@@ -326,3 +326,148 @@ test('apple homekit bridge: publishes Waiting sensor & Approve switch with valid
     fs.rmSync(tmpHome, { recursive: true, force: true });
   }
 });
+
+test('daily context archive: captures events & git commits and syncs by day to Railway endpoint', async () => {
+  const http = await import('node:http');
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { execFileSync } = await import('node:child_process');
+
+  const tmpRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'incontrol-git-test-'));
+  execFileSync('git', ['init'], { cwd: tmpRepo });
+  execFileSync('git', ['config', 'user.email', 'test@incontrol.dev'], { cwd: tmpRepo });
+  execFileSync('git', ['config', 'user.name', 'InControl Test'], { cwd: tmpRepo });
+  fs.writeFileSync(path.join(tmpRepo, 'README.md'), '# Test Repo\n');
+  execFileSync('git', ['add', 'README.md'], { cwd: tmpRepo });
+  execFileSync('git', ['commit', '-m', 'Initial test commit'], { cwd: tmpRepo });
+
+  // Mock Railway Collector HTTP receiver
+  const storedDays = new Map();
+  const collectorServer = http.createServer((req, res) => {
+    if (req.headers.authorization !== 'Bearer rw-test-secret') {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }));
+    }
+    if (req.method === 'POST' && req.url === '/api/days') {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => {
+        const parsed = JSON.parse(body);
+        storedDays.set(parsed.day, parsed);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, day: parsed.day, updatedAt: new Date().toISOString() }));
+      });
+      return;
+    }
+    if (req.method === 'GET' && req.url.startsWith('/api/days?')) {
+      const days = Array.from(storedDays.values()).map((d) => ({
+        day: d.day,
+        capturedAt: d.capturedAt,
+        summary: d.summary,
+        projectCount: d.stats.projectCount,
+        commitCount: d.stats.commitCount,
+        eventCount: d.stats.eventCount,
+      }));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true, days }));
+    }
+    const dayMatch = req.url.match(/^\/api\/days\/(\d{4}-\d{2}-\d{2})$/);
+    if (req.method === 'GET' && dayMatch && storedDays.has(dayMatch[1])) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true, day: dayMatch[1], collection: storedDays.get(dayMatch[1]) }));
+    }
+    res.writeHead(404);
+    res.end();
+  });
+
+  await new Promise((r) => collectorServer.listen(0, '127.0.0.1', r));
+  const collectorPort = collectorServer.address().port;
+  const hub = await createInControlHub({
+    port: 4804,
+    macNotifications: false,
+    token: 'ctx-tok',
+    autoWatch: false,
+    homekit: false,
+  });
+  const baseUrl = 'http://localhost:4804';
+  const auth = { Authorization: 'Bearer ctx-tok' };
+  const origRes = await (await fetch(`${baseUrl}/api/settings`, { headers: auth })).json();
+  const origSettings = origRes.settings;
+
+  try {
+    // Reject unsafe metadata SSRF URL
+    const ssrfRes = await fetch(`${baseUrl}/api/settings`, {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ railwayUrl: 'http://169.254.169.254/latest/meta-data' }),
+    });
+    assert.equal(ssrfRes.status, 400);
+
+    // Configure mock Railway Collector URL + secret token & verify token masking
+    const cfgRes = await (
+      await fetch(`${baseUrl}/api/settings`, {
+        method: 'POST',
+        headers: { ...auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          railwayUrl: `http://127.0.0.1:${collectorPort}`,
+          railwayToken: 'rw-test-secret',
+        }),
+      })
+    ).json();
+    assert.equal(cfgRes.ok, true);
+    assert.equal(cfgRes.settings.hasRailwayToken, true);
+    assert.equal(cfgRes.settings.railwayToken, '••••••••');
+
+    // Register an active agent in our temp git repo
+    await fetch(`${baseUrl}/api/agents/event`, {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: 'ctx-agent-1',
+        name: 'Codex',
+        provider: 'codex',
+        workspace: tmpRepo,
+        currentTask: 'Implement archive test',
+        logMessage: 'Recorded context test event',
+      }),
+    });
+
+    // Capture today's full bundle & push to mock Railway
+    const capRes = await (
+      await fetch(`${baseUrl}/api/context/capture`, {
+        method: 'POST',
+        headers: { ...auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+    ).json();
+    assert.equal(capRes.ok, true);
+    assert.equal(capRes.railway.synced, true);
+    assert.ok(capRes.snapshot.stats.commitCount >= 1);
+    assert.ok(capRes.snapshot.workspaces.some((w) => w.commitsToday.some((c) => c.subject === 'Initial test commit')));
+
+    // Fetch archive index & day collection through hub
+    const daysRes = await (await fetch(`${baseUrl}/api/context/days`, { headers: auth })).json();
+    assert.equal(daysRes.ok, true);
+    assert.equal(daysRes.remoteDays.length, 1);
+
+    const dayDetail = await (
+      await fetch(`${baseUrl}/api/context/days/${capRes.snapshot.day}`, { headers: auth })
+    ).json();
+    assert.equal(dayDetail.ok, true);
+    assert.equal(dayDetail.source, 'railway');
+    assert.equal(dayDetail.collection.day, capRes.snapshot.day);
+
+    // Restore original settings
+    await fetch(`${baseUrl}/api/settings`, {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...origSettings, railwayToken: '' }),
+    });
+  } finally {
+    await hub.close();
+    collectorServer.closeAllConnections?.();
+    await new Promise((r) => collectorServer.close(r));
+    fs.rmSync(tmpRepo, { recursive: true, force: true });
+  }
+});

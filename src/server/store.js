@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { normalizeToolKey, findProjectIconPath } from './icons.js';
+import { appendDailyEvent } from './context-collector.js';
 
 /**
  * Priority order for agent attention states:
@@ -338,6 +339,16 @@ export class AgentStore extends EventEmitter {
     if (this.globalEvents.length > 60) {
       this.globalEvents.length = 60;
     }
+    appendDailyEvent({
+      ...entry,
+      agentId: agent.id,
+      agentName: agent.name,
+      provider: agent.provider,
+      projectName: agent.projectName,
+      workspace: agent.workspace,
+      branch: agent.branch,
+      status: agent.status,
+    });
   }
 
   _deriveId(payload) {

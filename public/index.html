@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="manifest" href="/manifest.json" />
   <title>InControl</title>
-  <link rel="stylesheet" href="/styles.css?v=12" />
+  <link rel="stylesheet" href="/styles.css?v=13" />
 </head>
 <body data-theme="obsidian" data-logo="orbit">
   <div class="app-shell">
@@ -164,6 +164,16 @@
             </span>
             <span id="apple-home-badge" class="adv-item-badge">Ready</span>
           </button>
+
+          <button id="btn-archive" class="adv-menu-item" type="button" title="Browse daily context snapshots & Railway collection">
+            <span class="adv-item-left">
+              <span class="adv-item-icon">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+              </span>
+              <span>Daily Archive</span>
+            </span>
+            <span id="archive-menu-badge" class="adv-item-badge">Local</span>
+          </button>
         </div>
       </div>
 
@@ -179,6 +189,10 @@
         </button>
 
         <div class="bottom-bar-actions">
+          <button id="btn-save-day" class="bottom-pill" type="button" title="Capture today's full context & save to Railway">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+            <span>Save Day</span>
+          </button>
           <button id="btn-connect" class="bottom-pill primary" type="button" title="Connect an agent or IDE">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span>Connect</span>
@@ -608,6 +622,42 @@ incontrol wrap --name "Aider" -- aider</pre>
     </div>
   </div>
 
-  <script src="/app.js?v=12" type="module"></script>
+  <!-- Modal: Daily Context Archive & Railway Sync -->
+  <div id="modal-archive" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-archive-title">
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <h2 id="modal-archive-title">Daily Context Archive</h2>
+        <button class="modal-close" data-close="modal-archive" aria-label="Close">✕</button>
+      </div>
+      <p class="modal-subtitle">
+        Capture today's InControl logs, active workspace Git commits, and local AI session summaries into a by-day Railway Postgres collection.
+      </p>
+
+      <div class="wa-actions" style="justify-content:space-between;margin-bottom:10px;">
+        <button type="button" id="btn-archive-capture-now" class="btn-decision primary">Save Today's Context</button>
+        <a id="railway-dashboard-link" class="btn-decision hidden" href="#" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none;">Open Railway</a>
+      </div>
+
+      <form id="railway-config-form" class="wa-form" style="margin-bottom:12px;">
+        <div class="wa-field">
+          <label for="cfg-railway-url">Railway Collector URL</label>
+          <input id="cfg-railway-url" class="wa-input" type="url" placeholder="https://incontrol-archive.up.railway.app" />
+        </div>
+        <div class="wa-field">
+          <label for="cfg-railway-token">Collector API Token</label>
+          <input id="cfg-railway-token" class="wa-input" type="password" placeholder="Paste bearer token" autocomplete="off" />
+        </div>
+        <div class="wa-actions">
+          <button type="submit" class="btn-decision">Save Railway Config</button>
+        </div>
+      </form>
+
+      <div class="divider-label">Saved Days</div>
+      <div id="archive-days-list" class="archive-list"></div>
+      <pre id="archive-day-preview" class="prompt-code hidden" style="max-height:170px;margin-top:8px;"></pre>
+    </div>
+  </div>
+
+  <script src="/app.js?v=13" type="module"></script>
 </body>
 </html>

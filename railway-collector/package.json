@@ -1,0 +1,16 @@
+{
+  "name": "incontrol-railway-collector",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Postgres-backed daily context collection receiver for InControl",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "pg": "^8.16.0"
+  }
+}

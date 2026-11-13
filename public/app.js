@@ -310,6 +310,29 @@ function applySettingsToUI() {
     ahBadge.textContent = hkOn ? 'HomeKit' : 'Ready';
     ahBadge.classList.toggle('active', hkOn);
   }
+  const archiveBadge = $('#archive-menu-badge');
+  if (archiveBadge) {
+    const rwReady = Boolean(s.railwayUrl && (s.hasRailwayToken || s.railwayToken));
+    archiveBadge.textContent = rwReady ? 'Railway' : 'Local';
+    archiveBadge.classList.toggle('active', rwReady);
+  }
+  if ($('#cfg-railway-url') && document.activeElement !== $('#cfg-railway-url')) {
+    $('#cfg-railway-url').value = s.railwayUrl || '';
+  }
+  if ($('#cfg-railway-token') && document.activeElement !== $('#cfg-railway-token')) {
+    $('#cfg-railway-token').value = s.hasRailwayToken ? '••••••••' : '';
+  }
+  const rwLink = $('#railway-dashboard-link');
+  if (rwLink) {
+    if (s.railwayProjectUrl) {
+      rwLink.href = s.railwayProjectUrl;
+      rwLink.classList.remove('hidden');
+    } else {
+      rwLink.classList.add('hidden');
+    }
+  }
+    ahBadge.classList.toggle('active', hkOn);
+  }
 
   // Sync native macOS panel geometry & pop-up mode
   window.webkit?.messageHandlers?.panelConfig?.postMessage({
@@ -1065,6 +1088,160 @@ $('#btn-hk-reset')?.addEventListener('click', async () => {
   const data = await res.json().catch(() => ({}));
   await refreshAppleHomeModal();
   toast(data.message || 'HomeKit pairing reset');
+});
+
+// ---------------- Daily Context Capture & Railway Archive ----------------
+async function triggerDailyCapture(triggerBtn = null) {
+  if (DEMO_MODE) {
+    toast('Captured 2026-11-13 -> Railway (demo: 4 projects, 7 commits)');
+    return;
+  }
+  const origHtml = triggerBtn ? triggerBtn.innerHTML : null;
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.textContent = 'Saving…';
+  }
+  try {
+    const res = await fetch('/api/context/capture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      toast(data.error || 'Failed to capture daily context');
+      return;
+    }
+    const snap = data.snapshot || {};
+    const stats = snap.stats || {};
+    const statsText = `${stats.projectCount || 0}p · ${stats.commitCount || 0}c · ${stats.eventCount || 0}e`;
+    if (data.railway?.synced) {
+      toast(`Saved ${snap.day} → Railway (${statsText})`);
+    } else if (data.railway?.error) {
+      toast(`Saved locally (${statsText}) · Railway error: ${data.railway.error}`);
+    } else {
+      toast(`Saved ${snap.day} locally (${statsText})`);
+    }
+    if (!$('#modal-archive')?.classList.contains('hidden')) {
+      await refreshArchiveModal();
+    }
+  } finally {
+    if (triggerBtn && origHtml !== null) {
+      triggerBtn.disabled = false;
+      triggerBtn.innerHTML = origHtml;
+    }
+  }
+}
+
+async function refreshArchiveModal() {
+  const listEl = $('#archive-days-list');
+  const previewEl = $('#archive-day-preview');
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="modal-note">Loading daily collections…</div>';
+  previewEl?.classList.add('hidden');
+  try {
+    const res = await fetch('/api/context/days');
+    const data = await res.json();
+    if (!data.ok) {
+      listEl.innerHTML = `<div class="modal-note">${esc(data.error || 'Unable to load archive')}</div>`;
+      return;
+    }
+    const merged = new Map();
+    for (const d of data.localDays || []) {
+      merged.set(d.day, { ...d, badges: ['Local'] });
+    }
+    for (const d of data.remoteDays || []) {
+      const prev = merged.get(d.day);
+      merged.set(d.day, {
+        ...(prev || {}),
+        ...d,
+        badges: prev ? ['Railway', 'Local'] : ['Railway'],
+      });
+    }
+    const items = Array.from(merged.values()).sort((a, b) => b.day.localeCompare(a.day));
+    if (!items.length) {
+      listEl.innerHTML = '<div class="modal-note">No daily snapshots saved yet. Click "Save Today\'s Context" above.</div>';
+      return;
+    }
+    listEl.innerHTML = items
+      .map(
+        (d) => `
+        <button type="button" class="archive-row" data-act="preview-day" data-day="${esc(d.day)}">
+          <div class="archive-row-top">
+            <span class="archive-day">${esc(d.day)}</span>
+            <span class="archive-badges">${d.badges.map((b) => `<span class="url-badge">${esc(b)}</span>`).join('')}</span>
+          </div>
+          <div class="archive-summary">${esc(d.summary || `${d.projectCount || 0} projects · ${d.commitCount || 0} commits · ${d.eventCount || 0} events`)}</div>
+        </button>`
+      )
+      .join('');
+  } catch {
+    listEl.innerHTML = '<div class="modal-note">Failed to fetch archive list</div>';
+  }
+}
+
+$('#btn-save-day')?.addEventListener('click', () => triggerDailyCapture($('#btn-save-day')));
+$('#btn-archive-capture-now')?.addEventListener('click', () => triggerDailyCapture($('#btn-archive-capture-now')));
+$('#btn-archive')?.addEventListener('click', async () => {
+  $('#advanced-drawer')?.classList.add('hidden');
+  $('#btn-advanced')?.classList.remove('active');
+  $('#modal-archive')?.classList.remove('hidden');
+  await refreshArchiveModal();
+});
+$('#railway-config-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const railwayUrl = ($('#cfg-railway-url')?.value || '').trim();
+  const railwayToken = ($('#cfg-railway-token')?.value || '').trim();
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ railwayUrl, railwayToken }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      toast(data.error || 'Invalid Railway settings');
+      return;
+    }
+    if (data.settings) state.settings = data.settings;
+    applySettingsToUI();
+    toast('Saved Railway Collector settings');
+    await refreshArchiveModal();
+  } catch {
+    toast('Failed to save Railway settings');
+  }
+});
+document.addEventListener('click', async (e) => {
+  const dayBtn = e.target.closest('[data-act="preview-day"]');
+  if (!dayBtn) return;
+  const day = dayBtn.dataset.day;
+  const previewEl = $('#archive-day-preview');
+  if (!previewEl) return;
+  previewEl.textContent = `Loading ${day}…`;
+  previewEl.classList.remove('hidden');
+  const res = await fetch(`/api/context/days/${encodeURIComponent(day)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    previewEl.textContent = data.error || 'Not found';
+    return;
+  }
+  const col = data.collection || {};
+  previewEl.textContent = JSON.stringify(
+    {
+      day: col.day,
+      source: data.source,
+      capturedAt: col.capturedAt,
+      summary: col.summary,
+      projects: col.projects,
+      commitsToday: (col.workspaces || []).flatMap((w) =>
+        (w.commitsToday || []).map((c) => `[${w.projectName}] ${c.hash} ${c.subject}`)
+      ),
+      aiSessions: (col.aiSessions || []).map((s) => `${s.provider}: ${s.title}`),
+      recentEvents: (col.events || []).slice(0, 12).map((ev) => `${ev.projectName}: ${ev.message}`),
+    },
+    null,
+    2
+  );
 });
 
 function syncWhatsAppProviderPane(provider) {

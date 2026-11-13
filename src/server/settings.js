@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
+import { validateRailwayUrl } from './context-collector.js';
 
 const CONFIG_DIR = process.env.INCONTROL_HOME || path.join(os.homedir(), '.incontrol');
 const SETTINGS_PATH = path.join(CONFIG_DIR, 'settings.json');
@@ -62,8 +63,20 @@ export const DEFAULT_SETTINGS = {
   allowVoiceApproval: false, // Siri / voice shortcuts can read status by default; approvals are opt-in
   homekitEnabled: false, // Apple Home (HomeKit HAP bridge)
   allowHomekitApproval: true, // HomeKit "Approve Waiting Agent" switch
+  railwayUrl: '', // Railway Collector service base URL (e.g. https://incontrol-archive.up.railway.app)
+  railwayToken: '', // Bearer token for Railway Collector (masked on public API responses)
+  railwayProjectUrl: '', // Optional Railway dashboard URL for quick linking
   customFunctions: DEFAULT_FUNCTIONS,
 };
+
+export function getPublicUserSettings() {
+  const full = loadUserSettings();
+  return {
+    ...full,
+    hasRailwayToken: Boolean(full.railwayToken),
+    railwayToken: full.railwayToken ? '••••••••' : '',
+  };
+}
 
 export function loadUserSettings() {
   try {
@@ -77,7 +90,18 @@ export function loadUserSettings() {
 
 export function saveUserSettings(patch = {}) {
   const current = loadUserSettings();
-  const merged = normalizeSettings({ ...current, ...patch });
+  const cleanPatch = { ...patch };
+  if (cleanPatch.railwayToken === '••••••••' || cleanPatch.railwayToken === undefined) {
+    delete cleanPatch.railwayToken;
+  }
+  if (typeof cleanPatch.railwayUrl === 'string') {
+    const check = validateRailwayUrl(cleanPatch.railwayUrl);
+    if (!check.ok) {
+      throw new Error(check.error);
+    }
+    cleanPatch.railwayUrl = check.url;
+  }
+  const merged = normalizeSettings({ ...current, ...cleanPatch });
   try {
     fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
     fs.writeFileSync(SETTINGS_PATH, JSON.stringify(merged, null, 2) + '\n', { mode: 0o600 });
@@ -113,6 +137,14 @@ function normalizeSettings(raw = {}) {
     typeof raw.allowHomekitApproval === 'boolean'
       ? raw.allowHomekitApproval
       : DEFAULT_SETTINGS.allowHomekitApproval;
+  const railwayUrlCheck = validateRailwayUrl(raw.railwayUrl);
+  const railwayUrl = railwayUrlCheck.ok ? railwayUrlCheck.url : DEFAULT_SETTINGS.railwayUrl;
+  const railwayToken =
+    typeof raw.railwayToken === 'string' ? raw.railwayToken.trim().slice(0, 256) : DEFAULT_SETTINGS.railwayToken;
+  const railwayProjectUrl =
+    typeof raw.railwayProjectUrl === 'string' && raw.railwayProjectUrl.startsWith('https://railway.com/')
+      ? raw.railwayProjectUrl.trim().slice(0, 256)
+      : '';
 
   let customFunctions = DEFAULT_FUNCTIONS;
   if (Array.isArray(raw.customFunctions)) {
@@ -149,6 +181,9 @@ function normalizeSettings(raw = {}) {
     allowVoiceApproval,
     homekitEnabled,
     allowHomekitApproval,
+    railwayUrl,
+    railwayToken,
+    railwayProjectUrl,
     customFunctions,
   };
 }

@@ -22,9 +22,20 @@ import {
 } from './whatsapp.js';
 import {
   loadUserSettings,
+  getPublicUserSettings,
   saveUserSettings,
   executeCustomFunction,
 } from './settings.js';
+import {
+  captureDailyContext,
+  pushSnapshotToRailway,
+  fetchRailwayDays,
+  fetchRailwayDay,
+  listLocalDays,
+  readLocalSnapshot,
+  isValidDayString,
+  formatLocalDay,
+} from './context-collector.js';
 import {
   getToolIconAsset,
   findProjectIconPath,
@@ -342,13 +353,18 @@ export async function createInControlHub(options = {}) {
 
       // 10b. GET/POST /api/settings & POST /api/agents/:id/function — User customization & custom functions
       if (req.method === 'GET' && pathname === '/api/settings') {
-        return sendJson(res, 200, { ok: true, settings: loadUserSettings() });
+        return sendJson(res, 200, { ok: true, settings: getPublicUserSettings() });
       }
 
       if (req.method === 'POST' && pathname === '/api/settings') {
         const body = await readJsonBody(req);
         const prev = loadUserSettings();
-        const updated = saveUserSettings(body);
+        try {
+          saveUserSettings(body);
+        } catch (err) {
+          return sendJson(res, 400, { ok: false, error: err.message });
+        }
+        const updated = loadUserSettings();
         if (options.homekit !== false && updated.homekitEnabled !== prev.homekitEnabled) {
           if (updated.homekitEnabled) {
             await homekit.start();
@@ -363,9 +379,58 @@ export async function createInControlHub(options = {}) {
         return sendJson(res, 200, {
           ok: true,
           message: 'Saved InControl settings',
-          settings: updated,
+          settings: getPublicUserSettings(),
           homekit: summarizeHomeKit(homekit),
         });
+      }
+
+      // 10e. Daily Context Collection & Railway Archive
+      if (req.method === 'POST' && pathname === '/api/context/capture') {
+        const body = await readJsonBody(req);
+        const day = isValidDayString(body.day) ? body.day : formatLocalDay();
+        const snapshot = await captureDailyContext(store, {
+          day,
+          extraWorkspaces: Array.isArray(body.workspaces) ? body.workspaces : [],
+        });
+        const settings = loadUserSettings();
+        const railway = await pushSnapshotToRailway(snapshot, settings);
+        return sendJson(res, 200, {
+          ok: true,
+          snapshot,
+          railway,
+        });
+      }
+
+      if (req.method === 'GET' && pathname === '/api/context/days') {
+        const settings = loadUserSettings();
+        const localDays = listLocalDays(30);
+        const remote = settings.railwayUrl && settings.railwayToken
+          ? await fetchRailwayDays(settings, 30)
+          : { ok: false, configured: false, days: [] };
+        return sendJson(res, 200, {
+          ok: true,
+          railwayConfigured: Boolean(settings.railwayUrl && settings.railwayToken),
+          railwayError: remote.ok ? null : remote.error || null,
+          remoteDays: remote.days || [],
+          localDays,
+        });
+      }
+
+      const dayArchiveMatch = pathname.match(/^\/api\/context\/days\/(\d{4}-\d{2}-\d{2})$/);
+      if (req.method === 'GET' && dayArchiveMatch) {
+        const day = dayArchiveMatch[1];
+        const settings = loadUserSettings();
+        if (settings.railwayUrl && settings.railwayToken) {
+          const remote = await fetchRailwayDay(day, settings);
+          if (remote.ok && remote.collection) {
+            return sendJson(res, 200, { ok: true, source: 'railway', day, collection: remote.collection });
+          }
+        }
+        const local = readLocalSnapshot(day);
+        if (local) {
+          return sendJson(res, 200, { ok: true, source: 'local', day, collection: local });
+        }
+        return sendJson(res, 404, { ok: false, error: `No snapshot found for ${day}` });
       }
 
       // 10d. Apple Home / HomeView / Siri Voice Endpoints
@@ -606,7 +671,7 @@ function buildFullState(store, network, qrSvg, homekit) {
     integrations: getIntegrationsStatus(),
     whatsapp: getPublicWhatsAppStatus(),
     homekit: summarizeHomeKit(homekit),
-    settings: loadUserSettings(),
+    settings: getPublicUserSettings(),
     network,
     qrSvg,
     globalEvents: store.globalEvents.slice(0, 25),

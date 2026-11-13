@@ -83,7 +83,11 @@ function loadOrCreateHomeKitCredentials({ reset = false } = {}) {
 export function createHomeKitBridge(store, { getSettings, advertise = true } = {}) {
   const persistDir = path.join(getHomeKitDir(), 'homekit-persist');
   fs.mkdirSync(persistDir, { recursive: true, mode: 0o700 });
-  HAPStorage.setCustomStoragePath(persistDir);
+  try {
+    HAPStorage.setCustomStoragePath(persistDir);
+  } catch {
+    // hap-nodejs throws if storage path was already initialized earlier in the same process
+  }
 
   let creds = loadOrCreateHomeKitCredentials();
   let accessory = null;

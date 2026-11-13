@@ -1849,3 +1849,56 @@ html.macos-panel .panel-only-btn {
   padding: 0 12px;
 }
 
+.archive-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 185px;
+  overflow-y: auto;
+  margin-top: 6px;
+}
+
+.archive-row {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--rim-border);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.archive-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--rim-border-strong);
+}
+
+.archive-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.archive-day {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.archive-badges {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.archive-summary {
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
