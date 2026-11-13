@@ -1,6 +1,22 @@
-import { test } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createInControlHub } from '../src/server/hub.js';
+
+let suiteHome;
+let origIncontrolHome;
+before(() => {
+  origIncontrolHome = process.env.INCONTROL_HOME;
+  suiteHome = fs.mkdtempSync(path.join(os.tmpdir(), 'incontrol-suite-home-'));
+  process.env.INCONTROL_HOME = suiteHome;
+});
+after(() => {
+  if (origIncontrolHome === undefined) delete process.env.INCONTROL_HOME;
+  else process.env.INCONTROL_HOME = origIncontrolHome;
+  if (suiteHome) fs.rmSync(suiteHome, { recursive: true, force: true });
+});
 
 test('hub: register agent, blocking ask resolved by panel reply', async () => {
   const hub = await createInControlHub({ port: 4799, macNotifications: false, token: 't', autoWatch: false });
@@ -445,6 +461,13 @@ test('daily context archive: captures events & git commits and syncs by day to R
     assert.equal(capRes.railway.synced, true);
     assert.ok(capRes.snapshot.stats.commitCount >= 1);
     assert.ok(capRes.snapshot.workspaces.some((w) => w.commitsToday.some((c) => c.subject === 'Initial test commit')));
+
+    // Verify secret redaction helper strips credentials cleanly
+    const { redactSecrets } = await import('../src/server/context-collector.js');
+    const redacted = redactSecrets('Bearer secret-token-123456 postgres://u:pass123@db.local/app sk-proj-abcdef1234567890');
+    assert.ok(!redacted.includes('secret-token-123456'));
+    assert.ok(!redacted.includes('pass123'));
+    assert.ok(!redacted.includes('sk-proj-abcdef1234567890'));
 
     // Fetch archive index & day collection through hub
     const daysRes = await (await fetch(`${baseUrl}/api/context/days`, { headers: auth })).json();

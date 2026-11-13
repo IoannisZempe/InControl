@@ -5,8 +5,13 @@ import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { validateRailwayUrl } from './context-collector.js';
 
-const CONFIG_DIR = process.env.INCONTROL_HOME || path.join(os.homedir(), '.incontrol');
-const SETTINGS_PATH = path.join(CONFIG_DIR, 'settings.json');
+function getConfigDir() {
+  return process.env.INCONTROL_HOME || path.join(os.homedir(), '.incontrol');
+}
+
+function getSettingsPath() {
+  return path.join(getConfigDir(), 'settings.json');
+}
 
 // Strict allowlist of built-in read-only/safe workspace commands (prevents arbitrary command execution via API)
 export const SAFE_WORKSPACE_COMMANDS = Object.freeze({
@@ -80,8 +85,9 @@ export function getPublicUserSettings() {
 
 export function loadUserSettings() {
   try {
-    if (fs.existsSync(SETTINGS_PATH)) {
-      const parsed = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8'));
+    const settingsPath = getSettingsPath();
+    if (fs.existsSync(settingsPath)) {
+      const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
       return normalizeSettings(parsed);
     }
   } catch {}
@@ -103,8 +109,8 @@ export function saveUserSettings(patch = {}) {
   }
   const merged = normalizeSettings({ ...current, ...cleanPatch });
   try {
-    fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
-    fs.writeFileSync(SETTINGS_PATH, JSON.stringify(merged, null, 2) + '\n', { mode: 0o600 });
+    fs.mkdirSync(getConfigDir(), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(getSettingsPath(), JSON.stringify(merged, null, 2) + '\n', { mode: 0o600 });
   } catch {}
   return merged;
 }

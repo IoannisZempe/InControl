@@ -1236,7 +1236,13 @@ document.addEventListener('click', async (e) => {
       commitsToday: (col.workspaces || []).flatMap((w) =>
         (w.commitsToday || []).map((c) => `[${w.projectName}] ${c.hash} ${c.subject}`)
       ),
-      aiSessions: (col.aiSessions || []).map((s) => `${s.provider}: ${s.title}`),
+      aiSessions: (col.aiSessions || []).map((s) => ({
+        provider: s.provider,
+        title: s.title,
+        workspace: s.workspace || undefined,
+        userPrompts: (s.userPrompts || []).slice(0, 5),
+        lastSummary: s.lastSummary || undefined,
+      })),
       recentEvents: (col.events || []).slice(0, 12).map((ev) => `${ev.projectName}: ${ev.message}`),
     },
     null,

@@ -239,8 +239,177 @@ function readFirstMarkdownHeading(filePath) {
 }
 
 /**
- * Scan local Antigravity / Claude Code / Codex directories for session metadata updated today.
- * Reads only titles/metadata — never scans raw credentials or env files.
+ * Redact common credential patterns before persisting or syncing session excerpts remotely.
+ */
+export function redactSecrets(input) {
+  let out = String(input || '');
+  out = out.replace(/(Bearer\s+)[A-Za-z0-9._\-~+/=]{12,}/gi, '$1[REDACTED]');
+  out = out.replace(/(https?:\/\/|postgres(?:ql)?:\/\/|mongodb(?:\+srv)?:\/\/)([^:@/\s]+):([^@/\s]+)@/gi, '$1$2:[REDACTED]@');
+  out = out.replace(/\b(sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{20,}|rk_live_[0-9A-Za-z]{16,}|pk_live_[0-9A-Za-z]{16,})\b/g, '[REDACTED]');
+  out = out.replace(/([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z0-9_]*\s*[=:]\s*['"]?)([^\s'"`]{8,})/gi, '$1[REDACTED]');
+  return out;
+}
+
+function cleanSnippet(text, maxLen = 360) {
+  return redactSecrets(String(text || '').replace(/\s+/g, ' ').trim()).slice(0, maxLen);
+}
+
+function extractAntigravitySessionContext(brainDir, entry, day) {
+  const fullDir = path.join(brainDir, entry);
+  let title = '';
+  const artifactNotes = [];
+  for (const candidate of ['task.md', 'implementation_plan.md', 'walkthrough.md', 'architecture_plan.md']) {
+    const p = path.join(fullDir, candidate);
+    if (!fs.existsSync(p)) continue;
+    try {
+      const stat = fs.statSync(p);
+      if (formatLocalDay(stat.mtime) !== day && candidate !== 'task.md') continue;
+      const heading = readFirstMarkdownHeading(p);
+      if (!title && heading) title = heading;
+      const excerpt = cleanSnippet(fs.readFileSync(p, 'utf8').slice(0, 600), 320);
+      if (excerpt) artifactNotes.push({ file: candidate, excerpt });
+    } catch {}
+  }
+
+  const userPrompts = [];
+  let lastSummary = '';
+  const transcriptPath = path.join(fullDir, '.system_generated', 'logs', 'transcript.jsonl');
+  if (fs.existsSync(transcriptPath)) {
+    try {
+      const raw = fs.readFileSync(transcriptPath, 'utf8');
+      for (const line of raw.split('\n')) {
+        if (!line.trim()) continue;
+        let obj;
+        try {
+          obj = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        const createdDay = obj.created_at ? formatLocalDay(obj.created_at) : day;
+        if (createdDay !== day) continue;
+
+        if (obj.type === 'USER_INPUT' && typeof obj.content === 'string') {
+          const match = obj.content.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/i);
+          const promptText = cleanSnippet(match ? match[1] : obj.content, 360);
+          if (promptText && !promptText.startsWith('The following is a <SYSTEM_MESSAGE>')) {
+            userPrompts.push(promptText);
+          }
+        } else if (obj.type === 'PLANNER_RESPONSE' && typeof obj.content === 'string' && obj.content.trim()) {
+          const summary = cleanSnippet(obj.content, 600);
+          if (summary) lastSummary = summary;
+        }
+      }
+    } catch {}
+  }
+
+  return {
+    title: cleanSnippet(title || userPrompts[0] || `Antigravity session (${entry.slice(0, 8)})`, 120),
+    userPrompts: userPrompts.slice(-15),
+    lastSummary,
+    artifacts: artifactNotes.slice(0, 4),
+  };
+}
+
+function extractCodexSessionContext(filePath) {
+  let cwd = '';
+  let branch = '';
+  const userPrompts = [];
+  let lastSummary = '';
+
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      let obj;
+      try {
+        obj = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (obj.type === 'session_meta' && obj.payload) {
+        if (typeof obj.payload.cwd === 'string') cwd = obj.payload.cwd;
+        if (typeof obj.payload.git?.branch === 'string') branch = obj.payload.git.branch;
+      } else if (obj.type === 'event_msg' && obj.payload) {
+        if (obj.payload.type === 'user_message' && typeof obj.payload.message === 'string') {
+          const msg = cleanSnippet(obj.payload.message, 360);
+          if (msg) userPrompts.push(msg);
+        } else if (obj.payload.type === 'agent_message' && typeof obj.payload.message === 'string') {
+          const msg = cleanSnippet(obj.payload.message, 600);
+          if (msg) lastSummary = msg;
+        }
+      } else if (obj.type === 'response_item' && obj.payload?.type === 'message') {
+        const contentArr = Array.isArray(obj.payload.content) ? obj.payload.content : [];
+        const text = contentArr.map((c) => c?.text || '').join(' ').trim();
+        if (obj.payload.role === 'user' && text && !text.startsWith('# AGENTS.md') && !text.startsWith('<environment_context>')) {
+          const cleaned = cleanSnippet(text, 360);
+          if (cleaned && !userPrompts.includes(cleaned)) userPrompts.push(cleaned);
+        } else if (obj.payload.role === 'assistant' && text) {
+          lastSummary = cleanSnippet(text, 600);
+        }
+      }
+    }
+  } catch {}
+
+  const projectName = cwd ? path.basename(cwd) : '';
+  return {
+    cwd,
+    branch,
+    title: cleanSnippet(userPrompts[0] || (projectName ? `Codex · ${projectName}` : 'Codex session'), 120),
+    userPrompts: userPrompts.slice(-15),
+    lastSummary,
+  };
+}
+
+function extractClaudeSessionContext(filePath, projSlug, day) {
+  let cwd = '';
+  const userPrompts = [];
+  let lastSummary = '';
+
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      let obj;
+      try {
+        obj = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (obj.timestamp && formatLocalDay(obj.timestamp) !== day) continue;
+      if (!cwd && typeof obj.cwd === 'string') cwd = obj.cwd;
+      const msg = obj.message || obj;
+      if (obj.type === 'user' || msg.role === 'user') {
+        const content = typeof msg.content === 'string'
+          ? msg.content
+          : Array.isArray(msg.content)
+            ? msg.content.map((b) => (b?.type === 'text' ? b.text : '')).join(' ')
+            : '';
+        const cleaned = cleanSnippet(content, 360);
+        if (cleaned) userPrompts.push(cleaned);
+      } else if (obj.type === 'assistant' || msg.role === 'assistant') {
+        const content = typeof msg.content === 'string'
+          ? msg.content
+          : Array.isArray(msg.content)
+            ? msg.content.map((b) => (b?.type === 'text' ? b.text : '')).join(' ')
+            : '';
+        const cleaned = cleanSnippet(content, 600);
+        if (cleaned) lastSummary = cleaned;
+      }
+    }
+  } catch {}
+
+  const fallbackProj = projSlug.replace(/^-+/, '').replace(/-/g, '/') || 'Claude Code';
+  return {
+    cwd,
+    title: cleanSnippet(userPrompts[0] || (cwd ? `Claude · ${path.basename(cwd)}` : fallbackProj), 120),
+    userPrompts: userPrompts.slice(-15),
+    lastSummary,
+  };
+}
+
+/**
+ * Scan local Antigravity / Claude Code / Codex directories for session metadata, prompts, and summaries updated today.
+ * Applies secret redaction and skips raw env/credential files.
  */
 export function collectLocalAiSessionsToday(day = formatLocalDay(), roots = {}) {
   if (process.env.INCONTROL_DISABLE_HOME_SCAN === '1' && !roots.force) {
@@ -265,18 +434,14 @@ export function collectLocalAiSessionsToday(day = formatLocalDay(), roots = {}) 
         }
         if (!stat.isDirectory() || formatLocalDay(stat.mtime) !== day) continue;
 
-        let title = '';
-        for (const candidate of ['task.md', 'implementation_plan.md', 'walkthrough.md']) {
-          const p = path.join(fullDir, candidate);
-          if (fs.existsSync(p)) {
-            title = readFirstMarkdownHeading(p);
-            if (title) break;
-          }
-        }
+        const details = extractAntigravitySessionContext(agBrainDir, entry, day);
         sessions.push({
           provider: 'antigravity',
           sessionId: entry,
-          title: title || `Antigravity session (${entry.slice(0, 8)})`,
+          title: details.title,
+          userPrompts: details.userPrompts,
+          lastSummary: details.lastSummary,
+          artifacts: details.artifacts,
           updatedAt: stat.mtime.toISOString(),
         });
       }
@@ -306,10 +471,14 @@ export function collectLocalAiSessionsToday(day = formatLocalDay(), roots = {}) 
             continue;
           }
           if (formatLocalDay(fStat.mtime) !== day) continue;
+          const details = extractClaudeSessionContext(filePath, projSlug, day);
           sessions.push({
             provider: 'claude-code',
             sessionId: file.replace(/\.jsonl$/, ''),
-            title: projSlug.replace(/^-+/, '').replace(/-/g, '/') || 'Claude Code session',
+            workspace: details.cwd || null,
+            title: details.title,
+            userPrompts: details.userPrompts,
+            lastSummary: details.lastSummary,
             updatedAt: fStat.mtime.toISOString(),
           });
         }
@@ -331,10 +500,15 @@ export function collectLocalAiSessionsToday(day = formatLocalDay(), roots = {}) 
         } catch {
           continue;
         }
+        const details = extractCodexSessionContext(filePath);
         sessions.push({
           provider: 'codex',
           sessionId: file.replace(/\.jsonl$/, ''),
-          title: `Codex session (${file.slice(0, 28)})`,
+          workspace: details.cwd || null,
+          branch: details.branch || null,
+          title: details.title,
+          userPrompts: details.userPrompts,
+          lastSummary: details.lastSummary,
           updatedAt: fStat.mtime.toISOString(),
         });
       }
@@ -352,7 +526,10 @@ export function collectLocalAiSessionsToday(day = formatLocalDay(), roots = {}) 
 export async function captureDailyContext(store, options = {}) {
   const day = isValidDayString(options.day) ? options.day : formatLocalDay();
   const capturedAt = new Date().toISOString();
-  const events = readDailyEvents(day, 1000);
+  const events = readDailyEvents(day, 1000).map((ev) => ({
+    ...ev,
+    message: redactSecrets(ev.message),
+  }));
   const liveAgents = store ? store.getSortedAgents() : [];
 
   const sanitizedAgents = liveAgents.map((a) => ({
@@ -364,29 +541,55 @@ export async function captureDailyContext(store, options = {}) {
     workspace: a.workspace,
     branch: a.branch,
     status: a.status,
-    currentTask: a.currentTask,
-    currentStep: a.currentStep,
+    currentTask: redactSecrets(a.currentTask),
+    currentStep: redactSecrets(a.currentStep),
     metrics: a.metrics,
-    logs: (a.logs || []).slice(0, 20),
+    logs: (a.logs || []).slice(0, 20).map((l) => ({ ...l, message: redactSecrets(l.message) })),
   }));
 
-  const workspaceSet = new Set();
+  const aiSessions = collectLocalAiSessionsToday(day, options.roots);
+
+  const activeWorkspaceSet = new Set();
   for (const a of sanitizedAgents) {
-    if (a.workspace) workspaceSet.add(a.workspace);
+    if (a.workspace) activeWorkspaceSet.add(a.workspace);
   }
   for (const ev of events) {
-    if (ev.workspace) workspaceSet.add(ev.workspace);
+    if (ev.workspace) activeWorkspaceSet.add(ev.workspace);
+  }
+  for (const s of aiSessions) {
+    if (s.workspace) activeWorkspaceSet.add(s.workspace);
   }
   for (const extra of options.extraWorkspaces || []) {
-    if (extra) workspaceSet.add(extra);
+    if (extra) activeWorkspaceSet.add(extra);
   }
 
-  const workspaceList = Array.from(workspaceSet).slice(0, 20);
-  const workspaces = (
+  // Also check standard repo containers on macOS for any repos committed/edited today even without a live agent
+  const discoveredSet = new Set(activeWorkspaceSet);
+  if (process.env.INCONTROL_DISABLE_HOME_SCAN !== '1') {
+    const home = os.homedir();
+    for (const parentDir of [path.join(home, 'Repo'), path.join(home, 'Documents', 'ChatGPT')]) {
+      try {
+        if (!fs.existsSync(parentDir)) continue;
+        for (const sub of fs.readdirSync(parentDir)) {
+          if (sub.startsWith('.')) continue;
+          const full = path.join(parentDir, sub);
+          try {
+            if (fs.statSync(full).isDirectory()) discoveredSet.add(full);
+          } catch {}
+        }
+      } catch {}
+    }
+  }
+
+  const workspaceList = Array.from(discoveredSet).slice(0, 30);
+  const allWorkspaces = (
     await Promise.all(workspaceList.map((wp) => collectWorkspaceGitToday(wp, day)))
   ).filter(Boolean);
 
-  const aiSessions = collectLocalAiSessionsToday(day, options.roots);
+  // Keep every workspace that belongs to an active/today session OR had commits/file changes today
+  const workspaces = allWorkspaces.filter(
+    (w) => activeWorkspaceSet.has(w.workspace) || w.commitsToday.length > 0 || w.changedFiles.length > 0
+  );
   const commitCount = workspaces.reduce((sum, w) => sum + (w.commitsToday?.length || 0), 0);
   const projectNames = Array.from(
     new Set([
