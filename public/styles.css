@@ -1,49 +1,49 @@
 :root {
-  /* Linear Carbon / Monochrome Glass Palette (Default) */
-  --bg: radial-gradient(120% 100% at 50% 0%, #17181f 0%, #0d0e12 58%, #07080b 100%);
-  --glass-card: linear-gradient(160deg, rgba(255, 255, 255, 0.068) 0%, rgba(255, 255, 255, 0.026) 100%);
-  --glass-card-hover: linear-gradient(160deg, rgba(255, 255, 255, 0.105) 0%, rgba(255, 255, 255, 0.045) 100%);
-  --glass-modal: linear-gradient(160deg, rgba(28, 29, 36, 0.90) 0%, rgba(14, 15, 20, 0.94) 100%);
-  --glass-well: rgba(0, 0, 0, 0.34);
-  --segmented-track: rgba(0, 0, 0, 0.34);
-  --segmented-thumb: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.08) 100%);
+  /* Linear Matte Obsidian Palette (Default) */
+  --bg: #0b0c0f;
+  --glass-card: rgba(20, 21, 26, 0.88);
+  --glass-card-hover: rgba(27, 28, 35, 0.96);
+  --glass-modal: rgba(18, 19, 24, 0.98);
+  --glass-well: rgba(0, 0, 0, 0.36);
+  --segmented-track: rgba(255, 255, 255, 0.035);
+  --segmented-thumb: rgba(255, 255, 255, 0.09);
 
-  --rim-border: rgba(255, 255, 255, 0.12);
-  --rim-border-strong: rgba(255, 255, 255, 0.26);
-  --hairline: rgba(255, 255, 255, 0.10);
-  --specular-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.18), inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
-  --specular-pill: inset 0 0.5px 0 0 rgba(255, 255, 255, 0.22);
+  --rim-border: rgba(255, 255, 255, 0.075);
+  --rim-border-strong: rgba(255, 255, 255, 0.16);
+  --hairline: rgba(255, 255, 255, 0.07);
+  --specular-card: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --specular-pill: none;
 
   --text: #f4f4f5;
-  --text-secondary: rgba(244, 244, 245, 0.68);
-  --text-muted: rgba(244, 244, 245, 0.44);
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
 
   /* Monochrome CTA & Surgical Semantic Edge Colors */
-  --cta-bg: linear-gradient(180deg, #fafafa 0%, #e4e4e7 100%);
+  --cta-bg: #f4f4f5;
   --cta-fg: #09090b;
-  --cta-border: rgba(255, 255, 255, 0.85);
-  --cta-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 2px 10px rgba(255, 255, 255, 0.14);
+  --cta-border: #ffffff;
+  --cta-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 
   --accent: #f4f4f5;
-  --accent-ring: rgba(244, 244, 245, 0.24);
-  --accent-subtle: rgba(255, 255, 255, 0.12);
-  --aurora-gradient: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.50), #2dd4bf, rgba(255, 255, 255, 0.50), transparent);
+  --accent-ring: rgba(244, 244, 245, 0.20);
+  --accent-subtle: rgba(255, 255, 255, 0.09);
+  --aurora-gradient: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), #2dd4bf, rgba(255, 255, 255, 0.45), transparent);
 
   --apple-blue: #e4e4e7;
   --apple-blue-hover: #ffffff;
   --apple-green: #2dd4bf;
-  --apple-green-subtle: rgba(45, 212, 191, 0.14);
+  --apple-green-subtle: rgba(45, 212, 191, 0.12);
   --apple-orange: #fbbf24;
-  --apple-orange-border: rgba(251, 191, 36, 0.42);
+  --apple-orange-border: rgba(251, 191, 36, 0.38);
   --apple-red: #f43f5e;
-  --apple-red-subtle: rgba(244, 63, 94, 0.14);
-  --apple-red-border: rgba(244, 63, 94, 0.48);
-  --apple-gray: rgba(255, 255, 255, 0.38);
+  --apple-red-subtle: rgba(244, 63, 94, 0.12);
+  --apple-red-border: rgba(244, 63, 94, 0.42);
+  --apple-gray: rgba(255, 255, 255, 0.32);
 
-  --radius-xl: 18px;
-  --radius-lg: 14px;
-  --radius-md: 10px;
-  --radius-sm: 7px;
+  --radius-xl: 10px;
+  --radius-lg: 8px;
+  --radius-md: 6px;
+  --radius-sm: 5px;
   --mono: 'SF Mono', ui-monospace, Menlo, monospace;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -76,58 +76,58 @@ body {
 /* Native macOS NSPanel: keep HTML/body transparent so NSVisualEffectView desktop blur shines through! */
 html.macos-panel,
 html.macos-panel body {
-  background: rgba(12, 13, 17, 0.20) !important;
+  background: rgba(10, 11, 14, 0.35) !important;
 }
 
 /* Raycast Smoked (Warm Charcoal Graphite + Rose Highlight) */
 body[data-theme='raycast'] {
-  --bg: radial-gradient(120% 100% at 50% 0%, #1f1e24 0%, #121216 58%, #0a0a0c 100%);
-  --glass-card: linear-gradient(160deg, rgba(255, 255, 255, 0.075) 0%, rgba(255, 255, 255, 0.025) 100%);
-  --glass-card-hover: linear-gradient(160deg, rgba(255, 255, 255, 0.115) 0%, rgba(255, 255, 255, 0.045) 100%);
-  --cta-bg: linear-gradient(180deg, #ff7070 0%, #f43f5e 100%);
+  --bg: #101013;
+  --glass-card: rgba(24, 24, 29, 0.88);
+  --glass-card-hover: rgba(31, 31, 38, 0.96);
+  --cta-bg: #f43f5e;
   --cta-fg: #ffffff;
-  --cta-border: rgba(255, 160, 170, 0.45);
-  --cta-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 2px 10px rgba(244, 63, 94, 0.24);
+  --cta-border: #fb7185;
+  --cta-shadow: 0 1px 2px rgba(244, 63, 94, 0.25);
   --accent: #fb7185;
-  --accent-ring: rgba(251, 113, 133, 0.28);
-  --accent-subtle: rgba(251, 113, 133, 0.14);
-  --aurora-gradient: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.36), #fb7185, rgba(255, 255, 255, 0.36), transparent);
+  --accent-ring: rgba(251, 113, 133, 0.24);
+  --accent-subtle: rgba(251, 113, 133, 0.12);
+  --aurora-gradient: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), #fb7185, rgba(255, 255, 255, 0.35), transparent);
 }
 
 html.macos-panel body[data-theme='raycast'] {
-  background: rgba(18, 17, 22, 0.24) !important;
+  background: rgba(16, 16, 20, 0.38) !important;
 }
 
 /* OLED Noir HUD (True Black + Sharp Hairline Ice/Emerald) */
 body[data-theme='hud'],
 body[data-theme='sapphire'] {
-  --bg: radial-gradient(120% 100% at 50% 0%, #090b10 0%, #030305 60%, #000000 100%);
-  --glass-card: linear-gradient(160deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.015) 100%);
-  --glass-card-hover: linear-gradient(160deg, rgba(255, 255, 255, 0.085) 0%, rgba(255, 255, 255, 0.03) 100%);
-  --rim-border: rgba(255, 255, 255, 0.09);
+  --bg: #000000;
+  --glass-card: rgba(12, 13, 16, 0.92);
+  --glass-card-hover: rgba(20, 21, 26, 0.98);
+  --rim-border: rgba(255, 255, 255, 0.075);
   --accent: #38bdf8;
-  --accent-ring: rgba(56, 189, 248, 0.26);
-  --accent-subtle: rgba(56, 189, 248, 0.14);
+  --accent-ring: rgba(56, 189, 248, 0.22);
+  --accent-subtle: rgba(56, 189, 248, 0.12);
   --apple-green: #10b981;
-  --apple-green-subtle: rgba(16, 185, 129, 0.14);
+  --apple-green-subtle: rgba(16, 185, 129, 0.12);
   --aurora-gradient: linear-gradient(90deg, transparent, #38bdf8, #10b981, transparent);
 }
 
 html.macos-panel body[data-theme='hud'],
 html.macos-panel body[data-theme='sapphire'] {
-  background: rgba(4, 5, 8, 0.30) !important;
+  background: rgba(2, 3, 5, 0.45) !important;
 }
 
-/* Apple Titanium Pro (Natural Brushed Slate + Platinum Specular) */
+/* Apple Titanium Pro (Natural Brushed Slate) */
 body[data-theme='titanium'] {
-  --bg: radial-gradient(120% 100% at 50% 0%, #2a2c32 0%, #191a1f 58%, #0f1013 100%);
-  --glass-card: linear-gradient(160deg, rgba(255, 255, 255, 0.105) 0%, rgba(255, 255, 255, 0.04) 100%);
-  --glass-card-hover: linear-gradient(160deg, rgba(255, 255, 255, 0.145) 0%, rgba(255, 255, 255, 0.06) 100%);
-  --rim-border: rgba(255, 255, 255, 0.16);
+  --bg: #17181c;
+  --glass-card: rgba(34, 35, 41, 0.88);
+  --glass-card-hover: rgba(42, 43, 50, 0.96);
+  --rim-border: rgba(255, 255, 255, 0.11);
 }
 
 html.macos-panel body[data-theme='titanium'] {
-  background: rgba(28, 30, 36, 0.20) !important;
+  background: rgba(26, 27, 32, 0.36) !important;
 }
 
 button {
@@ -162,15 +162,14 @@ html.macos-panel .app-shell {
   max-width: 100%;
 }
 
-/* ---------- Frosted Glass Top Header & Grabber ---------- */
+/* ---------- Linear Hairline Topbar & Grabber ---------- */
 .topbar {
   flex-shrink: 0;
-  padding: calc(3px + var(--safe-top)) 12px 11px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%);
-  backdrop-filter: blur(30px) saturate(200%);
-  -webkit-backdrop-filter: blur(30px) saturate(200%);
-  border-bottom: 0.5px solid var(--hairline);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  padding: calc(2px + var(--safe-top)) 10px 8px;
+  background: rgba(14, 15, 19, 0.72);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-bottom: 1px solid var(--hairline);
   cursor: grab;
 }
 
@@ -187,7 +186,7 @@ html.macos-panel .app-shell {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 14px;
+  height: 11px;
   width: 100%;
   cursor: grab;
 }
@@ -197,17 +196,16 @@ html.macos-panel .app-shell {
 }
 
 .grabber-pill {
-  width: 36px;
-  height: 4px;
+  width: 28px;
+  height: 3px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.30);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.22);
   transition: background 0.15s, width 0.15s;
 }
 
 .drag-bar:hover .grabber-pill {
-  background: rgba(255, 255, 255, 0.52);
-  width: 44px;
+  background: rgba(255, 255, 255, 0.44);
+  width: 38px;
 }
 
 .brand-row {
@@ -220,35 +218,33 @@ html.macos-panel .app-shell {
 .brand-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
 }
 
 .brand-logo-wrap {
   position: relative;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.05) 100%);
-  border: 0.5px solid rgba(255, 255, 255, 0.24);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.30), 0 2px 8px rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--rim-border);
   cursor: pointer;
   flex-shrink: 0;
-  transition: transform 0.15s, border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.15s, background 0.15s;
 }
 
 .brand-logo-wrap:hover {
-  transform: scale(1.05);
+  background: rgba(255, 255, 255, 0.10);
   border-color: var(--rim-border-strong);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 0 12px var(--accent-ring);
 }
 
 body[data-urgent='true'] .brand-logo-wrap {
-  border-color: rgba(244, 63, 94, 0.65);
-  box-shadow: 0 0 14px rgba(244, 63, 94, 0.40);
+  border-color: rgba(244, 63, 94, 0.60);
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.28);
 }
 
 .brand-logo {
@@ -319,26 +315,26 @@ body[data-logo='sliders'] .logo-sliders {
 }
 
 .icon-btn {
-  width: 27px;
-  height: 27px;
-  border-radius: 999px;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-md);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.11);
-  border: 0.5px solid rgba(255, 255, 255, 0.18);
-  box-shadow: var(--specular-pill), 0 2px 6px rgba(0, 0, 0, 0.15);
-  transition: background 0.14s, color 0.14s, transform 0.1s;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
 .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.20);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--rim-border);
   color: var(--text);
 }
 
 .icon-btn:active {
-  transform: scale(0.95);
+  transform: scale(0.96);
 }
 
 .panel-only-btn {
@@ -350,40 +346,39 @@ html.macos-panel .panel-only-btn {
 }
 
 .connect-btn {
-  height: 27px;
-  padding: 0 11px;
-  border-radius: 999px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--radius-md);
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--cta-fg);
   background: var(--cta-bg);
-  border: 0.5px solid var(--cta-border);
+  border: 1px solid var(--cta-border);
   box-shadow: var(--cta-shadow);
-  transition: filter 0.14s, transform 0.1s;
+  transition: filter 0.12s, transform 0.1s;
 }
 
 .connect-btn:hover {
-  filter: brightness(1.08);
+  filter: brightness(0.94);
 }
 
 .connect-btn:active {
   transform: scale(0.97);
 }
 
-/* ---------- Glass Segmented Control ---------- */
+/* ---------- Linear Segmented Filter Bar ---------- */
 .filter-bar {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 2px;
-  margin-top: 9px;
-  padding: 2.5px;
+  margin-top: 7px;
+  padding: 2px;
   background: var(--segmented-track);
-  border: 0.5px solid rgba(255, 255, 255, 0.10);
+  border: 1px solid var(--hairline);
   border-radius: var(--radius-md);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.32);
 }
 
 .filter-pill {
@@ -391,24 +386,23 @@ html.macos-panel .panel-only-btn {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  height: 24px;
+  height: 23px;
   padding: 0 6px;
   border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 500;
-  color: var(--text-secondary);
-  transition: all 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+  color: var(--text-muted);
+  transition: background 0.12s, color 0.12s;
 }
 
 .filter-pill:hover {
-  color: var(--text);
+  color: var(--text-secondary);
 }
 
 .filter-pill.active {
   background: var(--segmented-thumb);
   color: var(--text);
-  font-weight: 600;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.28), inset 0 0.5px 0 rgba(255, 255, 255, 0.38);
+  font-weight: 550;
 }
 
 .filter-count {
@@ -453,17 +447,17 @@ html.macos-panel .panel-only-btn {
 .agent-list {
   flex: 1;
   overflow-y: auto;
-  padding: 10px 11px 14px;
+  padding: 8px 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 5px;
 }
 
 .agent-list::-webkit-scrollbar {
-  width: 5px;
+  width: 4px;
 }
 .agent-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 99px;
 }
 
@@ -472,12 +466,11 @@ html.macos-panel .panel-only-btn {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px 5px 1px;
+  padding: 6px 2px 2px;
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: 550;
   letter-spacing: 0.02em;
-  color: var(--text-secondary);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  color: var(--text-muted);
   cursor: grab;
 }
 
@@ -491,17 +484,15 @@ html.macos-panel .panel-only-btn {
   gap: 6px;
 }
 
-/* ---------- Frosted Liquid Glass Platter Card ---------- */
+/* ---------- Linear Matte Issue-Style Agent Row ---------- */
 .agent-card {
   flex-shrink: 0;
   background: var(--glass-card);
-  backdrop-filter: blur(32px) saturate(200%);
-  -webkit-backdrop-filter: blur(32px) saturate(200%);
-  border: 0.5px solid var(--rim-border);
-  box-shadow: var(--specular-card), 0 6px 20px rgba(0, 0, 0, 0.20);
+  border: 1px solid var(--rim-border);
+  box-shadow: var(--specular-card);
   border-radius: var(--radius-lg);
-  padding: 11px 12px;
-  transition: background 0.16s, border-color 0.16s, box-shadow 0.16s;
+  padding: 8px 10px;
+  transition: background 0.12s, border-color 0.12s;
 }
 
 .agent-card:hover {
@@ -511,22 +502,27 @@ html.macos-panel .panel-only-btn {
 
 .agent-card.status-needs_input {
   border-color: rgba(244, 63, 94, 0.28);
-  background: radial-gradient(80% 120% at 0% 50%, rgba(244, 63, 94, 0.08) 0%, transparent 55%), var(--glass-card);
-  box-shadow: inset 2.5px 0 0 var(--apple-red), var(--specular-card), 0 6px 20px rgba(0, 0, 0, 0.24);
+  background: linear-gradient(90deg, rgba(244, 63, 94, 0.07) 0%, transparent 40%), var(--glass-card);
+  box-shadow: inset 2.5px 0 0 var(--apple-red), var(--specular-card);
 }
 
 .agent-card.status-needs_attention {
   border-color: rgba(251, 191, 36, 0.24);
-  background: radial-gradient(80% 120% at 0% 50%, rgba(251, 191, 36, 0.06) 0%, transparent 55%), var(--glass-card);
-  box-shadow: inset 2.5px 0 0 var(--apple-orange), var(--specular-card), 0 6px 20px rgba(0, 0, 0, 0.24);
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.055) 0%, transparent 40%), var(--glass-card);
+  box-shadow: inset 2.5px 0 0 var(--apple-orange), var(--specular-card);
 }
 
 .agent-card.status-working {
-  box-shadow: inset 2.5px 0 0 var(--apple-green), var(--specular-card), 0 6px 20px rgba(0, 0, 0, 0.20);
+  box-shadow: inset 2.5px 0 0 var(--apple-green), var(--specular-card);
 }
 
 .agent-card.status-idle {
-  opacity: 0.88;
+  opacity: 0.92;
+}
+
+.agent-card.status-idle:hover,
+.agent-card.status-idle.is-expanded {
+  opacity: 1;
 }
 
 /* Row 1: Identity + Quick Actions */
@@ -534,7 +530,7 @@ html.macos-panel .panel-only-btn {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 
 .card-title-group {
@@ -545,39 +541,37 @@ html.macos-panel .panel-only-btn {
   flex: 1;
 }
 
-/* Apple Squircle Project / Agentic Tool Avatar + Corner Badge */
+/* Linear Micro-Squircle Tool Avatar */
 .card-avatar-wrap {
   position: relative;
-  width: 28px;
-  height: 28px;
-  border-radius: 7.5px;
+  width: 22px;
+  height: 22px;
+  border-radius: 5.5px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 6px rgba(0, 0, 0, 0.28);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .avatar-main-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 7.5px;
+  border-radius: 5.5px;
   display: block;
 }
 
 .avatar-badge-img {
   position: absolute;
-  right: -4px;
-  bottom: -3px;
-  width: 15px;
-  height: 15px;
-  border-radius: 4.5px;
+  right: -3px;
+  bottom: -2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 3.5px;
   object-fit: cover;
-  background: #14161f;
-  border: 1.2px solid rgba(20, 22, 31, 0.95);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+  background: #121317;
+  border: 1px solid #0b0c0f;
 }
 
 .title-stack {
@@ -587,15 +581,15 @@ html.macos-panel .panel-only-btn {
 
 .title-primary {
   display: flex;
-  align-items: baseline;
-  gap: 6px;
+  align-items: center;
+  gap: 5px;
   min-width: 0;
 }
 
 .project-name {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.012em;
+  font-size: 12.5px;
+  font-weight: 550;
+  letter-spacing: -0.015em;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -603,17 +597,25 @@ html.macos-panel .panel-only-btn {
 }
 
 .agent-label {
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
   font-weight: 400;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   white-space: nowrap;
-  flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.meta-sep {
+  opacity: 0.45;
 }
 
 .card-top-right {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   flex-shrink: 0;
 }
 
@@ -625,63 +627,65 @@ html.macos-panel .panel-only-btn {
 }
 
 .mini-icon-btn {
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 999px;
+  height: 21px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
   gap: 3px;
   font-size: 10.5px;
   font-weight: 500;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.12);
-  border: 0.5px solid rgba(255, 255, 255, 0.18);
-  box-shadow: var(--specular-pill);
-  transition: all 0.12s;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
-.mini-icon-btn:hover {
-  background: rgba(255, 255, 255, 0.22);
+.mini-icon-btn:hover,
+.mini-icon-btn.active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--rim-border);
+  color: var(--text);
 }
 
 .mini-icon-btn:active {
   transform: scale(0.96);
 }
 
-/* Row 2: Sub-metadata (IDE + Branch) */
-.card-submeta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-  padding-left: 36px;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
+/* Row 2: Task & Live Step (aligned cleanly under title) */
 .branch-tag {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 2.5px;
   font-family: var(--mono);
-  font-size: 10.5px;
-  color: var(--text-secondary);
+  font-size: 10px;
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 84px;
 }
 
-/* Row 3: Task & Live Step */
 .card-body {
-  margin-top: 6px;
-  padding-left: 36px;
+  margin-top: 3px;
+  padding-left: 30px;
 }
 
 .task-line {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.94);
-  line-height: 1.38;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   user-select: text;
+}
+
+.agent-card.status-needs_input .task-line,
+.agent-card.status-needs_attention .task-line,
+.agent-card.is-expanded .task-line {
+  white-space: normal;
+  color: rgba(244, 244, 245, 0.90);
 }
 
 .step-line {
@@ -751,20 +755,20 @@ html.macos-panel .panel-only-btn {
 }
 
 .btn-decision {
-  height: 27px;
-  padding: 0 11px;
-  border-radius: 999px;
-  font-size: 11.5px;
+  height: 25px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  font-size: 11px;
   font-weight: 500;
-  background: rgba(255, 255, 255, 0.14);
-  border: 0.5px solid rgba(255, 255, 255, 0.20);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--rim-border);
   color: var(--text);
-  box-shadow: var(--specular-pill);
-  transition: all 0.12s;
+  transition: background 0.12s, border-color 0.12s;
 }
 
 .btn-decision:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: var(--rim-border-strong);
 }
 
 .btn-decision.primary {
@@ -776,40 +780,44 @@ html.macos-panel .panel-only-btn {
 }
 
 .btn-decision.primary:hover {
-  filter: brightness(1.06);
+  filter: brightness(0.94);
 }
 
 .btn-decision.danger {
   color: #fda4af;
   background: var(--apple-red-subtle);
-  border: 0.5px solid var(--apple-red-border);
+  border: 1px solid var(--apple-red-border);
 }
 
 .btn-decision.danger:hover {
-  background: rgba(244, 63, 94, 0.26);
+  background: rgba(244, 63, 94, 0.24);
 }
 
-/* Frosted Glass Spotlight / Messages Inline Reply Input */
+/* Linear Flat Command Input */
 .reply-form {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 5px;
+  margin-top: 7px;
+  padding-left: 30px;
+}
+
+.decision-zone .reply-form {
+  padding-left: 0;
 }
 
 .reply-input {
   flex: 1;
   min-width: 0;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: var(--glass-well);
-  border: 0.5px solid rgba(255, 255, 255, 0.16);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+  height: 26px;
+  padding: 0 9px;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.30);
+  border: 1px solid var(--rim-border);
   color: var(--text);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 11px;
   outline: none;
-  transition: border-color 0.14s, box-shadow 0.14s, background 0.14s;
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
 }
 
 .reply-input::placeholder {
@@ -817,21 +825,20 @@ html.macos-panel .panel-only-btn {
 }
 
 .reply-input:focus {
-  background: rgba(0, 0, 0, 0.42);
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2.5px var(--accent-ring), inset 0 1px 2px rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.45);
+  border-color: var(--rim-border-strong);
+  box-shadow: 0 0 0 2px var(--accent-ring);
 }
 
 .reply-submit {
-  height: 28px;
-  padding: 0 11px;
-  border-radius: 999px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: var(--radius-md);
   font-size: 11px;
-  font-weight: 600;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.12);
-  border: 0.5px solid rgba(255, 255, 255, 0.18);
-  box-shadow: var(--specular-pill);
+  font-weight: 550;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--rim-border);
   transition: all 0.12s;
 }
 
@@ -919,13 +926,13 @@ html.macos-panel .panel-only-btn {
   margin-bottom: 12px;
 }
 
-/* ---------- Glass Bottom Command Dock & Drawers ---------- */
+/* ---------- Linear Bottom Command Dock & Drawers ---------- */
 .bottom-bar {
   flex-shrink: 0;
-  border-top: 0.5px solid var(--hairline);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.14) 100%);
-  backdrop-filter: blur(32px) saturate(200%);
-  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border-top: 1px solid var(--hairline);
+  background: rgba(14, 15, 19, 0.85);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
   padding-bottom: var(--safe-bottom);
 }
 
@@ -943,13 +950,13 @@ html.macos-panel .panel-only-btn {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 4px;
+  padding: 2px 4px;
   text-align: left;
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 
 .bottom-bar-header:hover {
-  color: var(--text);
+  color: var(--text-secondary);
 }
 
 .bottom-bar-actions {
@@ -961,24 +968,23 @@ html.macos-panel .panel-only-btn {
 
 .bottom-pill {
   height: 24px;
-  padding: 0 9px;
-  border-radius: 999px;
+  padding: 0 8px;
+  border-radius: var(--radius-md);
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 10.5px;
   font-weight: 550;
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.10);
-  border: 0.5px solid rgba(255, 255, 255, 0.18);
-  box-shadow: var(--specular-pill);
-  transition: background 0.14s, color 0.14s, border-color 0.14s, transform 0.1s;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--rim-border);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
 .bottom-pill:hover,
 .bottom-pill.active {
-  background: rgba(255, 255, 255, 0.20);
-  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.10);
+  border-color: var(--rim-border-strong);
   color: var(--text);
 }
 
@@ -991,7 +997,7 @@ html.macos-panel .panel-only-btn {
 }
 
 .bottom-pill.primary:hover {
-  filter: brightness(1.06);
+  filter: brightness(0.94);
 }
 
 .advanced-drawer {
@@ -1517,25 +1523,30 @@ html.macos-panel .panel-only-btn {
   align-items: center;
   flex-wrap: wrap;
   gap: 5px;
-  margin-top: 8px;
+  margin-top: 7px;
   padding-top: 7px;
-  border-top: 0.5px solid rgba(255, 255, 255, 0.10);
+  padding-left: 30px;
+  border-top: 1px solid var(--hairline);
+}
+
+.agent-card.status-needs_input .card-fn-bar,
+.agent-card.status-needs_attention .card-fn-bar {
+  padding-left: 0;
 }
 
 .fn-chip {
   height: 22px;
-  padding: 0 8px;
-  border-radius: 999px;
+  padding: 0 7px;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 10.5px;
   font-weight: 500;
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.08);
-  border: 0.5px solid rgba(255, 255, 255, 0.16);
-  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.22);
-  transition: background 0.14s, color 0.14s, border-color 0.14s, transform 0.1s;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--rim-border);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
 .fn-chip:hover {

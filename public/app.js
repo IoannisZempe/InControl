@@ -14,6 +14,7 @@ const SECTION_META = {
 
 const ICON_BRANCH = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>`;
 const ICON_JUMP = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>`;
+const ICON_REPLY = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>`;
 
 let state = { agents: [], counts: {}, network: {}, globalEvents: [] };
 let filter = 'all';
@@ -22,6 +23,7 @@ let reconnectDelay = 500;
 let soundOn = localStorage.getItem('incontrol.sound') !== 'off';
 let lastInputIds = new Set();
 const expandedLogs = new Set();
+const expandedCards = new Set();
 const expandedCardAdvanced = new Set();
 const draftReplies = new Map();
 
@@ -501,7 +503,10 @@ function renderCard(a) {
   const p = a.pendingPrompt;
   const updated = timeAgo(a.metrics?.updatedAt, true);
   const showLogs = expandedLogs.has(a.id);
-  const fnBarHtml = renderFunctionBar(a);
+  const hasDraft = Boolean((draftReplies.get(a.id) || '').trim());
+  const isUrgentOrReview = a.status === 'needs_input' || a.status === 'needs_attention';
+  const isCardExpanded = isUrgentOrReview || expandedCards.has(a.id) || expandedCardAdvanced.has(a.id) || hasDraft;
+  const fnBarHtml = isCardExpanded ? renderFunctionBar(a) : '';
 
   let decisionHtml = '';
   if (a.status === 'needs_input' && p) {
@@ -543,7 +548,7 @@ function renderCard(a) {
         <button type="submit" class="reply-submit">Send</button>
         <button type="button" class="btn-decision danger" data-act="respond" data-agent="${esc(a.id)}" data-action="stop" title="Stop agent before next model call">Stop</button>
       </form>`;
-  } else if (a.status === 'idle') {
+  } else if (a.status === 'idle' && isCardExpanded) {
     decisionHtml = `
       <form class="reply-form" data-act="reply-form" data-agent="${esc(a.id)}">
         <input class="reply-input" data-reply-for="${esc(a.id)}" placeholder="Queue message or instruction…" value="${esc(draftReplies.get(a.id) || '')}" autocomplete="off" />
@@ -559,8 +564,13 @@ function renderCard(a) {
           .join('')}</ul>`
       : '';
 
+  const showExpandBtn = !isUrgentOrReview;
+  const metaLine = [esc(a.name), a.branch ? `<span class="branch-tag">${ICON_BRANCH}<span>${esc(a.branch)}</span></span>` : '']
+    .filter(Boolean)
+    .join('<span class="meta-sep">·</span>');
+
   return `
-    <article class="agent-card status-${a.status}" data-id="${esc(a.id)}">
+    <article class="agent-card status-${a.status} ${isCardExpanded ? 'is-expanded' : 'is-compact'}" data-id="${esc(a.id)}">
       ${a.status === 'working' ? '<div class="card-aurora-bar"></div>' : ''}
       <div class="card-top">
         <div class="card-title-group">
@@ -568,33 +578,37 @@ function renderCard(a) {
           <div class="title-stack">
             <div class="title-primary">
               <span class="project-name" title="${esc(a.workspace)}">${esc(a.projectName)}</span>
-              <span class="agent-label">${esc(a.name)}</span>
+              <span class="agent-label">${metaLine}</span>
             </div>
           </div>
         </div>
         <div class="card-top-right">
           <span class="time-label">${updated}</span>
-          <button class="mini-icon-btn" data-act="toggle-log" data-agent="${esc(a.id)}" title="Toggle activity log">${showLogs ? 'Hide' : 'Log'}</button>
+          ${
+            showExpandBtn
+              ? `<button class="mini-icon-btn ${isCardExpanded ? 'active' : ''}" data-act="toggle-expand" data-agent="${esc(a.id)}" title="${isCardExpanded ? 'Collapse actions' : 'Reply or run action'}">${ICON_REPLY}</button>`
+              : ''
+          }
+          <button class="mini-icon-btn ${showLogs ? 'active' : ''}" data-act="toggle-log" data-agent="${esc(a.id)}" title="Toggle activity log">${showLogs ? 'Hide' : 'Log'}</button>
           <button class="mini-icon-btn" data-act="focus" data-agent="${esc(a.id)}" title="Focus ${esc(a.ide)} window">${ICON_JUMP}<span>Focus</span></button>
         </div>
       </div>
 
-      <div class="card-submeta">
-        <span>${esc(a.ide)}</span>
-        ${a.branch ? `<span>·</span><span class="branch-tag">${ICON_BRANCH}<span>${esc(a.branch)}</span></span>` : ''}
-      </div>
-
-      <div class="card-body">
-        ${a.currentTask ? `<div class="task-line">${esc(a.currentTask)}</div>` : ''}
-        ${
-          a.currentStep
-            ? `<div class="step-line" title="${esc(a.currentStep)}">
-                 ${a.status === 'working' ? '<span class="step-pulse"></span>' : ''}
-                 <span>${esc(a.currentStep)}</span>
-               </div>`
-            : ''
-        }
-      </div>
+      ${
+        a.currentTask || a.currentStep
+          ? `<div class="card-body">
+               ${a.currentTask ? `<div class="task-line">${esc(a.currentTask)}</div>` : ''}
+               ${
+                 a.currentStep && (a.status !== 'idle' || a.currentStep !== 'Idle')
+                   ? `<div class="step-line" title="${esc(a.currentStep)}">
+                        ${a.status === 'working' ? '<span class="step-pulse"></span>' : ''}
+                        <span>${esc(a.currentStep)}</span>
+                      </div>`
+                   : ''
+               }
+             </div>`
+          : ''
+      }
 
       ${decisionHtml}
       ${fnBarHtml}
@@ -761,6 +775,20 @@ document.addEventListener('click', async (e) => {
     case 'toggle-log':
       expandedLogs.has(agentId) ? expandedLogs.delete(agentId) : expandedLogs.add(agentId);
       return renderAgents();
+    case 'toggle-expand': {
+      const opening = !expandedCards.has(agentId);
+      if (opening) {
+        expandedCards.add(agentId);
+      } else {
+        expandedCards.delete(agentId);
+        expandedCardAdvanced.delete(agentId);
+      }
+      renderAgents();
+      if (opening) {
+        requestAnimationFrame(() => document.querySelector(`[data-reply-for="${agentId}"]`)?.focus());
+      }
+      return;
+    }
     case 'toggle-card-advanced':
       expandedCardAdvanced.has(agentId)
         ? expandedCardAdvanced.delete(agentId)
