@@ -506,3 +506,133 @@ test('client scripts: all browser modules parse with valid JavaScript syntax', a
     execFileSync(process.execPath, ['--check', file]);
   }
 });
+
+test('railway setup: dry-run, first-time provisioning with staging, stdin secret, and idempotent re-run', async () => {
+  const { setupRailwayArchive } = await import('../src/server/railway-setup.js');
+  const { loadUserSettings, getPublicUserSettings } = await import('../src/server/settings.js');
+
+  // 1. Dry-run returns plan cleanly without touching CLI or settings
+  const dry = await setupRailwayArchive({ dryRun: true, withStaging: true });
+  assert.equal(dry.ok, true);
+  assert.equal(dry.dryRun, true);
+  assert.ok(dry.steps.some((s) => s.includes('staging')));
+
+  // 2. First-time full mocked provisioning (unauthenticated -> browser login -> prod + staging)
+  let loggedIn = false;
+  const stdinSecrets = [];
+  const createdDomains = { production: 'daily-archive-prod.up.railway.app', staging: 'daily-archive-stg.up.railway.app' };
+  let activeEnv = 'production';
+  const calls = [];
+
+  const mockExec = async (cmd, args = [], opts = {}) => {
+    calls.push([cmd, ...args]);
+    if (cmd === 'railway' && args[0] === '--version') return { stdout: 'railway 5.48.0', stderr: '' };
+    if (cmd === 'railway' && args[0] === 'whoami') {
+      if (!loggedIn) throw Object.assign(new Error('Not signed in'), { code: 1 });
+      return { stdout: '{"email":"user@example.com"}', stderr: '' };
+    }
+    if (cmd === 'railway' && args[0] === 'project' && args[1] === 'list') return { stdout: '[]', stderr: '' };
+    if (cmd === 'railway' && args[0] === 'init') return { stdout: '{}', stderr: '' };
+    if (cmd === 'railway' && args[0] === 'status') return { stdout: '{"id":"proj-123","name":"incontrol-archive"}', stderr: '' };
+    if (cmd === 'railway' && args[0] === 'environment' && args[1] === 'link') {
+      if (args[2] === 'staging' && !calls.some((c) => c[1] === 'environment' && c[2] === 'new')) {
+        throw new Error('Environment not found');
+      }
+      activeEnv = args[2];
+      return { stdout: '', stderr: '' };
+    }
+    if (cmd === 'railway' && args[0] === 'environment' && args[1] === 'new') {
+      return { stdout: '', stderr: '' };
+    }
+    if (cmd === 'railway' && args[0] === 'service' && args[1] === 'list') return { stdout: '[]', stderr: '' };
+    if (cmd === 'railway' && args[0] === 'add') return { stdout: '{"serviceId":"svc-1"}', stderr: '' };
+    if (cmd === 'railway' && args[0] === 'variable' && args[1] === 'set') {
+      // Ensure COLLECTOR_API_TOKEN is always passed via stdin, never argv
+      assert.ok(!args.some((a) => /^COLLECTOR_API_TOKEN=/.test(a)));
+      if (args.includes('--stdin')) stdinSecrets.push({ env: activeEnv, token: opts.input });
+      return { stdout: '', stderr: '' };
+    }
+    if (cmd === 'railway' && args[0] === 'up') return { stdout: '', stderr: '' };
+    if (cmd === 'railway' && args[0] === 'deployment' && args[1] === 'list') {
+      return { stdout: JSON.stringify([{ id: 'dep-1', status: 'SUCCESS' }]), stderr: '' };
+    }
+    if (cmd === 'railway' && args[0] === 'domain' && args[1] === 'list') return { stdout: '[]', stderr: '' };
+    if (cmd === 'railway' && args[0] === 'domain') {
+      return { stdout: JSON.stringify({ domain: createdDomains[activeEnv] }), stderr: '' };
+    }
+    throw new Error(`Unexpected command: ${cmd} ${args.join(' ')}`);
+  };
+
+  const mockInteractive = async (cmd, args = []) => {
+    calls.push(['INTERACTIVE', cmd, ...args]);
+    if (cmd === 'railway' && args[0] === 'login') {
+      loggedIn = true;
+      return { code: 0 };
+    }
+    throw new Error(`Unexpected interactive command: ${cmd} ${args.join(' ')}`);
+  };
+
+  const healthCheckedUrls = [];
+  const mockFetch = async (url) => {
+    healthCheckedUrls.push(url);
+    return { ok: true, status: 200, json: async () => ({ ok: true }) };
+  };
+
+  const res = await setupRailwayArchive({
+    withStaging: true,
+    exec: mockExec,
+    interactive: mockInteractive,
+    fetch: mockFetch,
+    pollIntervalMs: 1,
+    log: () => {},
+  });
+
+  assert.equal(res.ok, true);
+  assert.equal(res.projectId, 'proj-123');
+  assert.equal(res.railwayUrl, 'https://daily-archive-prod.up.railway.app');
+  assert.equal(res.stagingUrl, 'https://daily-archive-stg.up.railway.app');
+  assert.equal(res.railwayProjectUrl, 'https://railway.com/project/proj-123');
+  assert.equal(stdinSecrets.length, 2);
+  assert.notEqual(stdinSecrets[0].token, stdinSecrets[1].token);
+  assert.ok(healthCheckedUrls.includes('https://daily-archive-prod.up.railway.app/health'));
+  assert.ok(healthCheckedUrls.includes('https://daily-archive-stg.up.railway.app/health'));
+
+  const saved = loadUserSettings();
+  assert.equal(saved.railwayUrl, 'https://daily-archive-prod.up.railway.app');
+  assert.equal(saved.railwayToken, stdinSecrets[0].token);
+  assert.equal(getPublicUserSettings().railwayToken, '••••••••');
+
+  // 3. Idempotent re-run reuses existing project, Postgres, service, and domain without `init` or `add`
+  const rerunCalls = [];
+  const res2 = await setupRailwayArchive({
+    exec: async (cmd, args = [], opts = {}) => {
+      rerunCalls.push([cmd, ...args]);
+      if (cmd === 'railway' && args[0] === '--version') return { stdout: 'railway 5.48.0', stderr: '' };
+      if (cmd === 'railway' && args[0] === 'whoami') return { stdout: '{"email":"user@example.com"}', stderr: '' };
+      if (cmd === 'railway' && args[0] === 'project' && args[1] === 'list') {
+        return { stdout: JSON.stringify([{ id: 'proj-123', name: 'incontrol-archive' }]), stderr: '' };
+      }
+      if (cmd === 'railway' && args[0] === 'link') return { stdout: '', stderr: '' };
+      if (cmd === 'railway' && args[0] === 'environment' && args[1] === 'link') return { stdout: '', stderr: '' };
+      if (cmd === 'railway' && args[0] === 'service' && args[1] === 'list') {
+        return { stdout: JSON.stringify([{ name: 'Postgres' }, { name: 'daily-archive' }]), stderr: '' };
+      }
+      if (cmd === 'railway' && args[0] === 'variable' && args[1] === 'set') return { stdout: '', stderr: '' };
+      if (cmd === 'railway' && args[0] === 'up') return { stdout: '', stderr: '' };
+      if (cmd === 'railway' && args[0] === 'deployment' && args[1] === 'list') {
+        return { stdout: JSON.stringify([{ id: 'dep-2', status: 'SUCCESS' }]), stderr: '' };
+      }
+      if (cmd === 'railway' && args[0] === 'domain' && args[1] === 'list') {
+        return { stdout: JSON.stringify([{ domain: 'daily-archive-prod.up.railway.app' }]), stderr: '' };
+      }
+      throw new Error(`Unexpected rerun command: ${cmd} ${args.join(' ')}`);
+    },
+    fetch: mockFetch,
+    pollIntervalMs: 1,
+    log: () => {},
+  });
+
+  assert.equal(res2.ok, true);
+  assert.equal(res2.projectId, 'proj-123');
+  assert.ok(!rerunCalls.some((c) => c[1] === 'init' || c[1] === 'add'));
+});

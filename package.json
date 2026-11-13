@@ -18,6 +18,8 @@
     "bin/",
     "src/",
     "public/",
+    "railway-collector/",
+    "scripts/setup-railway.sh",
     "macos/InControlPanel.swift",
     "README.md",
     "LICENSE"

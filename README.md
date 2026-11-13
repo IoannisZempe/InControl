@@ -36,6 +36,10 @@
 - **Custom 1-click functions & macros.** Add your own reusable functions (agent prompts, workspace commands like `git status -sb` or `npm test`, or webhooks) directly to every agent card.
 - **Apple Liquid Glass macOS side panel.** A native Cocoa `NSPanel` + `NSVisualEffectView` floating panel with customizable glass themes (*Liquid Obsidian*, *Midnight Sapphire*, *Graphite Titanium*), selectable brand logo marks (*Command Orbit*, *HUD Reticle*, *Control Faders*), and smart auto-pop-up when an agent requires action.
 - **Phone, tablet, and other devices.** Scan the QR code to open the panel over your LAN or Tailscale.
+- **1-Click Daily Context Archive (Save Day -> Railway).** Click **Save Day** in the panel to capture the full day's InControl logs, touched Git repositories & commits, and local AI session summaries (Antigravity, Codex, Claude Code) with automatic secret redaction, archived by day into your own Railway PostgreSQL database:
+  ```bash
+  ./scripts/setup-railway.sh    # or: npx incontrol-agents setup railway
+  ```
 - **Local-first.** Everything runs on your machine. No cloud account needed.
 
 ## Quick start

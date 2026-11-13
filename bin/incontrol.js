@@ -131,8 +131,32 @@ Keep this secret — anyone with it can answer your agents.`);
             2
           )
         );
+      } else if (args[0] === 'railway') {
+        const { setupRailwayArchive } = await import('../src/server/railway-setup.js');
+        const res = await setupRailwayArchive({
+          projectName: flag('--project') || 'incontrol-archive',
+          environment: flag('--env') || flag('--environment') || 'production',
+          serviceName: flag('--service') || 'daily-archive',
+          withStaging: args.includes('--with-staging'),
+          dryRun: args.includes('--dry-run'),
+          allowInstall: !args.includes('--no-install'),
+          rotateToken: args.includes('--rotate-token'),
+        });
+        if (res.dryRun) {
+          console.log('InControl Railway Setup — Dry Run Plan:\n');
+          res.steps.forEach((s, idx) => console.log(`  ${idx + 1}. ${s}`));
+          console.log('\nRe-run without --dry-run to provision Postgres + Daily Archive automatically.');
+        } else {
+          console.log(`
+  ✓ InControl Railway Daily Archive is live!
+  Collector URL: ${res.railwayUrl}${res.stagingUrl ? `\n  Staging URL:   ${res.stagingUrl}` : ''}${res.railwayProjectUrl ? `\n  Dashboard:     ${res.railwayProjectUrl}` : ''}
+  Local config:  saved to ~/.incontrol/settings.json (token masked on disk as 0600)
+
+  Next: Open InControl and click "Save Day" to archive today's context.
+`);
+        }
       } else {
-        console.error('Usage: incontrol setup <claude-code|mcp> [--install] [--ide <Name>]');
+        console.error('Usage: incontrol setup <claude-code|mcp|railway> [--install] [--ide <Name>] [--with-staging] [--dry-run]');
         process.exit(1);
       }
       break;
@@ -149,6 +173,7 @@ Usage:
   incontrol panel                                                  Open the native macOS side panel
   incontrol setup claude-code [--install]                          Connect Claude Code via hooks
   incontrol setup mcp [--ide Cursor]                               Print MCP config for IDE agents
+  incontrol setup railway [--with-staging] [--dry-run]             Auto-deploy Postgres + Daily Archive to Railway
   incontrol mcp [--ide <Name>] [--name <Agent>]                    Run MCP server (stdio)
   incontrol wrap [--name X] [--ide Y] -- <cmd...>                  Wrap a CLI agent (codex, aider…)
   incontrol hook claude <Event> [--gate-bash]                      Claude Code hook handler
