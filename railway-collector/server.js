@@ -216,7 +216,8 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 404, { ok: false, error: 'Not found' });
   } catch (err) {
     const status = err.statusCode || 500;
-    return sendJson(res, status, { ok: false, error: err.message || 'Internal Server Error' });
+    const message = status >= 500 ? 'Internal Server Error' : (err.message || 'Bad Request');
+    return sendJson(res, status, { ok: false, error: message });
   }
 });
 

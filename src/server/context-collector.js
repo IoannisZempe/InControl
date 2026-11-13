@@ -243,9 +243,11 @@ function readFirstMarkdownHeading(filePath) {
  */
 export function redactSecrets(input) {
   let out = String(input || '');
+  out = out.replace(/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g, '[REDACTED_PRIVATE_KEY]');
   out = out.replace(/(Bearer\s+)[A-Za-z0-9._\-~+/=]{12,}/gi, '$1[REDACTED]');
   out = out.replace(/(https?:\/\/|postgres(?:ql)?:\/\/|mongodb(?:\+srv)?:\/\/)([^:@/\s]+):([^@/\s]+)@/gi, '$1$2:[REDACTED]@');
-  out = out.replace(/\b(sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{20,}|rk_live_[0-9A-Za-z]{16,}|pk_live_[0-9A-Za-z]{16,})\b/g, '[REDACTED]');
+  out = out.replace(/\b(sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{20,}|AKIA[0-9A-Z]{16}|rk_live_[0-9A-Za-z]{16,}|pk_live_[0-9A-Za-z]{16,})\b/g, '[REDACTED]');
+  out = out.replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, '[REDACTED_JWT]');
   out = out.replace(/([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z0-9_]*\s*[=:]\s*['"]?)([^\s'"`]{8,})/gi, '$1[REDACTED]');
   return out;
 }

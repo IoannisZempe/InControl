@@ -464,10 +464,15 @@ test('daily context archive: captures events & git commits and syncs by day to R
 
     // Verify secret redaction helper strips credentials cleanly
     const { redactSecrets } = await import('../src/server/context-collector.js');
-    const redacted = redactSecrets('Bearer secret-token-123456 postgres://u:pass123@db.local/app sk-proj-abcdef1234567890');
+    const redacted = redactSecrets(
+      'Bearer secret-token-123456 postgres://u:pass123@db.local/app sk-proj-abcdef1234567890 AKIAIOSFODNN7EXAMPLE eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U -----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----'
+    );
     assert.ok(!redacted.includes('secret-token-123456'));
     assert.ok(!redacted.includes('pass123'));
     assert.ok(!redacted.includes('sk-proj-abcdef1234567890'));
+    assert.ok(!redacted.includes('AKIAIOSFODNN7EXAMPLE'));
+    assert.ok(!redacted.includes('dozjgNryP4J3jVmNHl0w5N'));
+    assert.ok(!redacted.includes('-----BEGIN PRIVATE KEY-----'));
 
     // Fetch archive index & day collection through hub
     const daysRes = await (await fetch(`${baseUrl}/api/context/days`, { headers: auth })).json();
