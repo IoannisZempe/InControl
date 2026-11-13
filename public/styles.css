@@ -1,34 +1,44 @@
 :root {
-  /* Apple macOS / visionOS Translucent Glass Palette */
-  --bg: radial-gradient(120% 100% at 50% 0%, #242736 0%, #14161f 60%, #0e1017 100%);
-  --glass-card: linear-gradient(155deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.06) 100%);
-  --glass-card-hover: linear-gradient(155deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.09) 100%);
-  --glass-modal: linear-gradient(160deg, rgba(48, 50, 60, 0.78) 0%, rgba(26, 28, 36, 0.84) 100%);
-  --glass-well: rgba(0, 0, 0, 0.24);
-  --segmented-track: rgba(0, 0, 0, 0.26);
-  --segmented-thumb: linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0.14) 100%);
+  /* Linear Carbon / Monochrome Glass Palette (Default) */
+  --bg: radial-gradient(120% 100% at 50% 0%, #17181f 0%, #0d0e12 58%, #07080b 100%);
+  --glass-card: linear-gradient(160deg, rgba(255, 255, 255, 0.068) 0%, rgba(255, 255, 255, 0.026) 100%);
+  --glass-card-hover: linear-gradient(160deg, rgba(255, 255, 255, 0.105) 0%, rgba(255, 255, 255, 0.045) 100%);
+  --glass-modal: linear-gradient(160deg, rgba(28, 29, 36, 0.90) 0%, rgba(14, 15, 20, 0.94) 100%);
+  --glass-well: rgba(0, 0, 0, 0.34);
+  --segmented-track: rgba(0, 0, 0, 0.34);
+  --segmented-thumb: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.08) 100%);
 
-  --rim-border: rgba(255, 255, 255, 0.20);
-  --rim-border-strong: rgba(255, 255, 255, 0.32);
-  --hairline: rgba(255, 255, 255, 0.14);
-  --specular-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.32), inset 0 0 0 0.5px rgba(255, 255, 255, 0.08);
-  --specular-pill: inset 0 0.5px 0 0 rgba(255, 255, 255, 0.34);
+  --rim-border: rgba(255, 255, 255, 0.12);
+  --rim-border-strong: rgba(255, 255, 255, 0.26);
+  --hairline: rgba(255, 255, 255, 0.10);
+  --specular-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.18), inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --specular-pill: inset 0 0.5px 0 0 rgba(255, 255, 255, 0.22);
 
-  --text: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.72);
-  --text-muted: rgba(255, 255, 255, 0.46);
+  --text: #f4f4f5;
+  --text-secondary: rgba(244, 244, 245, 0.68);
+  --text-muted: rgba(244, 244, 245, 0.44);
 
-  /* Apple System Colors */
-  --apple-blue: #0a84ff;
-  --apple-blue-hover: #409cff;
-  --apple-green: #30d158;
-  --apple-green-subtle: rgba(48, 209, 88, 0.20);
-  --apple-orange: #ff9f0a;
-  --apple-orange-border: rgba(255, 159, 10, 0.45);
-  --apple-red: #ff453a;
-  --apple-red-subtle: rgba(255, 69, 58, 0.22);
-  --apple-red-border: rgba(255, 69, 58, 0.48);
-  --apple-gray: rgba(255, 255, 255, 0.42);
+  /* Monochrome CTA & Surgical Semantic Edge Colors */
+  --cta-bg: linear-gradient(180deg, #fafafa 0%, #e4e4e7 100%);
+  --cta-fg: #09090b;
+  --cta-border: rgba(255, 255, 255, 0.85);
+  --cta-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 2px 10px rgba(255, 255, 255, 0.14);
+
+  --accent: #f4f4f5;
+  --accent-ring: rgba(244, 244, 245, 0.24);
+  --accent-subtle: rgba(255, 255, 255, 0.12);
+  --aurora-gradient: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.50), #2dd4bf, rgba(255, 255, 255, 0.50), transparent);
+
+  --apple-blue: #e4e4e7;
+  --apple-blue-hover: #ffffff;
+  --apple-green: #2dd4bf;
+  --apple-green-subtle: rgba(45, 212, 191, 0.14);
+  --apple-orange: #fbbf24;
+  --apple-orange-border: rgba(251, 191, 36, 0.42);
+  --apple-red: #f43f5e;
+  --apple-red-subtle: rgba(244, 63, 94, 0.14);
+  --apple-red-border: rgba(244, 63, 94, 0.48);
+  --apple-gray: rgba(255, 255, 255, 0.38);
 
   --radius-xl: 18px;
   --radius-lg: 14px;
@@ -66,27 +76,58 @@ body {
 /* Native macOS NSPanel: keep HTML/body transparent so NSVisualEffectView desktop blur shines through! */
 html.macos-panel,
 html.macos-panel body {
-  background: rgba(16, 18, 24, 0.14) !important;
+  background: rgba(12, 13, 17, 0.20) !important;
 }
 
+/* Raycast Smoked (Warm Charcoal Graphite + Rose Highlight) */
+body[data-theme='raycast'] {
+  --bg: radial-gradient(120% 100% at 50% 0%, #1f1e24 0%, #121216 58%, #0a0a0c 100%);
+  --glass-card: linear-gradient(160deg, rgba(255, 255, 255, 0.075) 0%, rgba(255, 255, 255, 0.025) 100%);
+  --glass-card-hover: linear-gradient(160deg, rgba(255, 255, 255, 0.115) 0%, rgba(255, 255, 255, 0.045) 100%);
+  --cta-bg: linear-gradient(180deg, #ff7070 0%, #f43f5e 100%);
+  --cta-fg: #ffffff;
+  --cta-border: rgba(255, 160, 170, 0.45);
+  --cta-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 2px 10px rgba(244, 63, 94, 0.24);
+  --accent: #fb7185;
+  --accent-ring: rgba(251, 113, 133, 0.28);
+  --accent-subtle: rgba(251, 113, 133, 0.14);
+  --aurora-gradient: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.36), #fb7185, rgba(255, 255, 255, 0.36), transparent);
+}
+
+html.macos-panel body[data-theme='raycast'] {
+  background: rgba(18, 17, 22, 0.24) !important;
+}
+
+/* OLED Noir HUD (True Black + Sharp Hairline Ice/Emerald) */
+body[data-theme='hud'],
 body[data-theme='sapphire'] {
-  --bg: radial-gradient(120% 100% at 50% 0%, #1a2a4a 0%, #0f172a 60%, #080d1a 100%);
-  --glass-card: linear-gradient(155deg, rgba(100, 210, 255, 0.16) 0%, rgba(10, 132, 255, 0.06) 100%);
-  --glass-card-hover: linear-gradient(155deg, rgba(100, 210, 255, 0.22) 0%, rgba(10, 132, 255, 0.10) 100%);
+  --bg: radial-gradient(120% 100% at 50% 0%, #090b10 0%, #030305 60%, #000000 100%);
+  --glass-card: linear-gradient(160deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.015) 100%);
+  --glass-card-hover: linear-gradient(160deg, rgba(255, 255, 255, 0.085) 0%, rgba(255, 255, 255, 0.03) 100%);
+  --rim-border: rgba(255, 255, 255, 0.09);
+  --accent: #38bdf8;
+  --accent-ring: rgba(56, 189, 248, 0.26);
+  --accent-subtle: rgba(56, 189, 248, 0.14);
+  --apple-green: #10b981;
+  --apple-green-subtle: rgba(16, 185, 129, 0.14);
+  --aurora-gradient: linear-gradient(90deg, transparent, #38bdf8, #10b981, transparent);
 }
 
+html.macos-panel body[data-theme='hud'],
 html.macos-panel body[data-theme='sapphire'] {
-  background: rgba(10, 22, 46, 0.22) !important;
+  background: rgba(4, 5, 8, 0.30) !important;
 }
 
+/* Apple Titanium Pro (Natural Brushed Slate + Platinum Specular) */
 body[data-theme='titanium'] {
-  --bg: radial-gradient(120% 100% at 50% 0%, #33363f 0%, #1f2127 60%, #141519 100%);
-  --glass-card: linear-gradient(155deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.08) 100%);
-  --glass-card-hover: linear-gradient(155deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.11) 100%);
+  --bg: radial-gradient(120% 100% at 50% 0%, #2a2c32 0%, #191a1f 58%, #0f1013 100%);
+  --glass-card: linear-gradient(160deg, rgba(255, 255, 255, 0.105) 0%, rgba(255, 255, 255, 0.04) 100%);
+  --glass-card-hover: linear-gradient(160deg, rgba(255, 255, 255, 0.145) 0%, rgba(255, 255, 255, 0.06) 100%);
+  --rim-border: rgba(255, 255, 255, 0.16);
 }
 
 html.macos-panel body[data-theme='titanium'] {
-  background: rgba(34, 36, 42, 0.20) !important;
+  background: rgba(28, 30, 36, 0.20) !important;
 }
 
 button {
@@ -201,13 +242,13 @@ html.macos-panel .app-shell {
 
 .brand-logo-wrap:hover {
   transform: scale(1.05);
-  border-color: rgba(100, 210, 255, 0.55);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 12px rgba(10, 132, 255, 0.35);
+  border-color: var(--rim-border-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 0 12px var(--accent-ring);
 }
 
 body[data-urgent='true'] .brand-logo-wrap {
-  border-color: rgba(255, 159, 10, 0.65);
-  box-shadow: 0 0 14px rgba(255, 69, 58, 0.45);
+  border-color: rgba(244, 63, 94, 0.65);
+  box-shadow: 0 0 14px rgba(244, 63, 94, 0.40);
 }
 
 .brand-logo {
@@ -241,7 +282,7 @@ body[data-logo='sliders'] .logo-sliders {
 
 .ws-dot.connected {
   background: var(--apple-green);
-  box-shadow: 0 0 6px rgba(48, 209, 88, 0.85);
+  box-shadow: 0 0 6px rgba(45, 212, 191, 0.85);
 }
 
 .brand-title-stack {
@@ -316,11 +357,11 @@ html.macos-panel .panel-only-btn {
   align-items: center;
   gap: 4px;
   font-size: 11.5px;
-  font-weight: 500;
-  color: #ffffff;
-  background: linear-gradient(180deg, #2693ff 0%, #0a84ff 100%);
-  border: 0.5px solid rgba(255, 255, 255, 0.28);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 8px rgba(10, 132, 255, 0.35);
+  font-weight: 600;
+  color: var(--cta-fg);
+  background: var(--cta-bg);
+  border: 0.5px solid var(--cta-border);
+  box-shadow: var(--cta-shadow);
   transition: filter 0.14s, transform 0.1s;
 }
 
@@ -394,15 +435,15 @@ html.macos-panel .panel-only-btn {
 
 .dot-input {
   background: var(--apple-red);
-  box-shadow: 0 0 6px rgba(255, 69, 58, 0.6);
+  box-shadow: 0 0 6px rgba(244, 63, 94, 0.65);
 }
 .dot-attention {
   background: var(--apple-orange);
-  box-shadow: 0 0 6px rgba(255, 159, 10, 0.5);
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.55);
 }
 .dot-working {
   background: var(--apple-green);
-  box-shadow: 0 0 6px rgba(48, 209, 88, 0.6);
+  box-shadow: 0 0 6px rgba(45, 212, 191, 0.60);
 }
 .dot-idle {
   background: var(--apple-gray);
@@ -469,13 +510,19 @@ html.macos-panel .panel-only-btn {
 }
 
 .agent-card.status-needs_input {
-  border-color: var(--apple-red-border);
-  background: linear-gradient(155deg, rgba(255, 69, 58, 0.22) 0%, rgba(255, 255, 255, 0.07) 100%);
+  border-color: rgba(244, 63, 94, 0.28);
+  background: radial-gradient(80% 120% at 0% 50%, rgba(244, 63, 94, 0.08) 0%, transparent 55%), var(--glass-card);
+  box-shadow: inset 2.5px 0 0 var(--apple-red), var(--specular-card), 0 6px 20px rgba(0, 0, 0, 0.24);
 }
 
 .agent-card.status-needs_attention {
-  border-color: var(--apple-orange-border);
-  background: linear-gradient(155deg, rgba(255, 159, 10, 0.16) 0%, rgba(255, 255, 255, 0.07) 100%);
+  border-color: rgba(251, 191, 36, 0.24);
+  background: radial-gradient(80% 120% at 0% 50%, rgba(251, 191, 36, 0.06) 0%, transparent 55%), var(--glass-card);
+  box-shadow: inset 2.5px 0 0 var(--apple-orange), var(--specular-card), 0 6px 20px rgba(0, 0, 0, 0.24);
+}
+
+.agent-card.status-working {
+  box-shadow: inset 2.5px 0 0 var(--apple-green), var(--specular-card), 0 6px 20px rgba(0, 0, 0, 0.20);
 }
 
 .agent-card.status-idle {
@@ -655,7 +702,7 @@ html.macos-panel .panel-only-btn {
   height: 6px;
   border-radius: 50%;
   background: var(--apple-green);
-  box-shadow: 0 0 8px rgba(48, 209, 88, 0.85);
+  box-shadow: 0 0 8px rgba(45, 212, 191, 0.85);
   flex-shrink: 0;
   animation: pulse 1.4s ease-in-out infinite;
 }
@@ -721,24 +768,25 @@ html.macos-panel .panel-only-btn {
 }
 
 .btn-decision.primary {
-  background: linear-gradient(180deg, #2693ff 0%, #0a84ff 100%);
-  border-color: rgba(255, 255, 255, 0.30);
-  color: #ffffff;
+  background: var(--cta-bg);
+  border-color: var(--cta-border);
+  color: var(--cta-fg);
   font-weight: 600;
+  box-shadow: var(--cta-shadow);
 }
 
 .btn-decision.primary:hover {
-  filter: brightness(1.08);
+  filter: brightness(1.06);
 }
 
 .btn-decision.danger {
-  color: #ff8078;
+  color: #fda4af;
   background: var(--apple-red-subtle);
   border: 0.5px solid var(--apple-red-border);
 }
 
 .btn-decision.danger:hover {
-  background: rgba(255, 69, 58, 0.32);
+  background: rgba(244, 63, 94, 0.26);
 }
 
 /* Frosted Glass Spotlight / Messages Inline Reply Input */
@@ -755,7 +803,7 @@ html.macos-panel .panel-only-btn {
   padding: 0 10px;
   border-radius: 999px;
   background: var(--glass-well);
-  border: 0.5px solid rgba(255, 255, 255, 0.18);
+  border: 0.5px solid rgba(255, 255, 255, 0.16);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
   color: var(--text);
   font: inherit;
@@ -769,9 +817,9 @@ html.macos-panel .panel-only-btn {
 }
 
 .reply-input:focus {
-  background: rgba(0, 0, 0, 0.36);
-  border-color: rgba(10, 132, 255, 0.85);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.30), inset 0 1px 2px rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.42);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2.5px var(--accent-ring), inset 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 .reply-submit {
@@ -779,18 +827,18 @@ html.macos-panel .panel-only-btn {
   padding: 0 11px;
   border-radius: 999px;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.14);
-  border: 0.5px solid rgba(255, 255, 255, 0.20);
+  background: rgba(255, 255, 255, 0.12);
+  border: 0.5px solid rgba(255, 255, 255, 0.18);
   box-shadow: var(--specular-pill);
   transition: all 0.12s;
 }
 
 .reply-submit:hover {
-  background: var(--apple-blue);
-  border-color: rgba(255, 255, 255, 0.35);
-  color: #ffffff;
+  background: var(--cta-bg);
+  border-color: var(--cta-border);
+  color: var(--cta-fg);
 }
 
 /* Attention banner */
@@ -806,7 +854,7 @@ html.macos-panel .panel-only-btn {
 
 .attention-text {
   font-size: 11.5px;
-  color: #ffe066;
+  color: #fde68a;
   line-height: 1.35;
 }
 
@@ -935,14 +983,15 @@ html.macos-panel .panel-only-btn {
 }
 
 .bottom-pill.primary {
-  color: #ffffff;
-  background: linear-gradient(180deg, #2693ff 0%, #0a84ff 100%);
-  border-color: rgba(255, 255, 255, 0.28);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 6px rgba(10, 132, 255, 0.30);
+  color: var(--cta-fg);
+  font-weight: 600;
+  background: var(--cta-bg);
+  border-color: var(--cta-border);
+  box-shadow: var(--cta-shadow);
 }
 
 .bottom-pill.primary:hover {
-  filter: brightness(1.08);
+  filter: brightness(1.06);
 }
 
 .advanced-drawer {
@@ -1016,7 +1065,7 @@ html.macos-panel .panel-only-btn {
   height: 5px;
   border-radius: 50%;
   background: var(--apple-green);
-  box-shadow: 0 0 6px rgba(48, 209, 88, 0.7);
+  box-shadow: 0 0 6px rgba(45, 212, 191, 0.70);
   flex-shrink: 0;
 }
 
@@ -1192,8 +1241,9 @@ html.macos-panel .panel-only-btn {
 }
 
 .copy-btn:hover {
-  background: var(--apple-blue);
-  color: #ffffff;
+  background: var(--cta-bg);
+  border-color: var(--cta-border);
+  color: var(--cta-fg);
 }
 
 .modal-note {
@@ -1250,7 +1300,7 @@ html.macos-panel .panel-only-btn {
 
 .integration-status.connected {
   background: var(--apple-green-subtle);
-  color: #5bf57f;
+  color: #5eead4;
 }
 
 .integration-sub {
@@ -1266,10 +1316,11 @@ html.macos-panel .panel-only-btn {
   padding: 0 10px;
   border-radius: 999px;
   font-size: 11px;
-  font-weight: 500;
-  background: var(--apple-blue);
-  color: #ffffff;
-  transition: background 0.14s;
+  font-weight: 600;
+  background: var(--cta-bg);
+  border: 0.5px solid var(--cta-border);
+  color: var(--cta-fg);
+  transition: filter 0.14s;
 }
 
 .integration-btn.installed {
@@ -1280,8 +1331,7 @@ html.macos-panel .panel-only-btn {
 }
 
 .integration-btn:hover {
-  background: var(--apple-blue-hover);
-  color: #ffffff;
+  filter: brightness(1.06);
 }
 
 .divider-label {
@@ -1346,9 +1396,9 @@ html.macos-panel .panel-only-btn {
 
 /* ---------- WhatsApp Auto-Escalation Modal ---------- */
 .icon-btn.wa-active {
-  color: #5bf57f;
-  background: rgba(48, 209, 88, 0.22);
-  border-color: rgba(48, 209, 88, 0.45);
+  color: #5eead4;
+  background: var(--apple-green-subtle);
+  border-color: rgba(45, 212, 191, 0.45);
 }
 
 .wa-form {
@@ -1409,8 +1459,8 @@ html.macos-panel .panel-only-btn {
 }
 
 .wa-input:focus {
-  border-color: var(--apple-blue);
-  box-shadow: 0 0 0 2.5px rgba(10, 132, 255, 0.28);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2.5px var(--accent-ring);
 }
 
 .wa-provider-pane {
@@ -1448,7 +1498,7 @@ html.macos-panel .panel-only-btn {
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #64d2ff, #0a84ff, #30d158, transparent);
+  background: var(--aurora-gradient);
   background-size: 200% 100%;
   animation: auroraSlide 2.6s linear infinite;
 }
@@ -1489,8 +1539,8 @@ html.macos-panel .panel-only-btn {
 }
 
 .fn-chip:hover {
-  background: rgba(10, 132, 255, 0.22);
-  border-color: rgba(100, 210, 255, 0.45);
+  background: var(--accent-subtle);
+  border-color: var(--rim-border-strong);
   color: #ffffff;
 }
 
@@ -1594,9 +1644,9 @@ html.macos-panel .panel-only-btn {
 }
 
 .logo-choice.active {
-  background: rgba(10, 132, 255, 0.18);
-  border-color: #409cff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 0 12px rgba(10, 132, 255, 0.25);
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 0 12px var(--accent-ring);
 }
 
 .logo-choice-title {
@@ -1673,18 +1723,18 @@ html.macos-panel .panel-only-btn {
   text-transform: uppercase;
   padding: 1px 5px;
   border-radius: 4px;
-  background: rgba(10, 132, 255, 0.22);
-  color: #7cc4ff;
+  background: var(--accent-subtle);
+  color: var(--text-secondary);
 }
 
 .fn-type-badge.type-shell {
-  background: rgba(48, 209, 88, 0.20);
-  color: #6ce88b;
+  background: var(--apple-green-subtle);
+  color: #5eead4;
 }
 
 .fn-type-badge.type-webhook {
-  background: rgba(255, 159, 10, 0.22);
-  color: #ffc266;
+  background: rgba(251, 191, 36, 0.16);
+  color: #fde68a;
 }
 
 .fn-item-payload {
@@ -1703,14 +1753,14 @@ html.macos-panel .panel-only-btn {
 }
 
 .mini-icon-btn.active-pin {
-  background: rgba(48, 209, 88, 0.20);
-  color: #6ce88b;
-  border-color: rgba(48, 209, 88, 0.35);
+  background: var(--apple-green-subtle);
+  color: #5eead4;
+  border-color: rgba(45, 212, 191, 0.35);
 }
 
 .mini-icon-btn.danger-text:hover {
-  background: rgba(255, 69, 58, 0.25);
-  color: #ff8078;
+  background: var(--apple-red-subtle);
+  color: #fda4af;
 }
 
 .add-fn-form {

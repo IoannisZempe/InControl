@@ -1,14 +1,14 @@
 :root {
-  --bg: radial-gradient(120% 100% at 20% 0%, #171d2e 0%, #0b0d14 60%, #06070b 100%);
-  --card: linear-gradient(155deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.05) 100%);
-  --border: rgba(255, 255, 255, 0.18);
-  --text: #ffffff;
-  --text-2: rgba(255, 255, 255, 0.74);
-  --text-3: rgba(255, 255, 255, 0.48);
-  --blue: #0a84ff;
-  --green: #30d158;
-  --orange: #ff9f0a;
-  --red: #ff453a;
+  --bg: radial-gradient(120% 100% at 20% 0%, #17181f 0%, #0b0c10 58%, #050507 100%);
+  --card: linear-gradient(160deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.025) 100%);
+  --border: rgba(255, 255, 255, 0.12);
+  --text: #f4f4f5;
+  --text-2: rgba(244, 244, 245, 0.70);
+  --text-3: rgba(244, 244, 245, 0.45);
+  --blue: #f4f4f5;
+  --green: #2dd4bf;
+  --orange: #fbbf24;
+  --red: #f43f5e;
   --mono: 'SF Mono', ui-monospace, Menlo, monospace;
 }
 
@@ -30,15 +30,15 @@ body {
 }
 
 body[data-state='urgent'] {
-  background: radial-gradient(110% 90% at 18% 0%, rgba(255, 69, 58, 0.24) 0%, #10121c 56%, #07080d 100%);
+  background: radial-gradient(110% 90% at 18% 0%, rgba(244, 63, 94, 0.14) 0%, #0c0d12 52%, #050507 100%);
 }
 
 body[data-state='review'] {
-  background: radial-gradient(110% 90% at 18% 0%, rgba(255, 159, 10, 0.20) 0%, #10121c 56%, #07080d 100%);
+  background: radial-gradient(110% 90% at 18% 0%, rgba(251, 191, 36, 0.11) 0%, #0c0d12 52%, #050507 100%);
 }
 
 body[data-state='working'] {
-  background: radial-gradient(110% 90% at 18% 0%, rgba(48, 209, 88, 0.16) 0%, #10141f 58%, #07080d 100%);
+  background: radial-gradient(110% 90% at 18% 0%, rgba(45, 212, 191, 0.10) 0%, #0b0d11 54%, #050507 100%);
 }
 
 .hidden {
@@ -107,29 +107,29 @@ body[data-state='working'] {
   height: 9px;
   border-radius: 50%;
   background: var(--green);
-  box-shadow: 0 0 10px rgba(48, 209, 88, 0.8);
+  box-shadow: 0 0 10px rgba(45, 212, 191, 0.8);
 }
 
 .hv-pill.urgent {
-  background: rgba(255, 69, 58, 0.24);
-  border-color: rgba(255, 69, 58, 0.55);
-  color: #ffb2ad;
+  background: rgba(244, 63, 94, 0.16);
+  border-color: rgba(244, 63, 94, 0.45);
+  color: #fda4af;
 }
 
 .hv-pill.urgent .hv-pill-dot {
   background: var(--red);
-  box-shadow: 0 0 12px rgba(255, 69, 58, 0.9);
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.9);
 }
 
 .hv-pill.review {
-  background: rgba(255, 159, 10, 0.22);
-  border-color: rgba(255, 159, 10, 0.5);
-  color: #ffd38a;
+  background: rgba(251, 191, 36, 0.16);
+  border-color: rgba(251, 191, 36, 0.42);
+  color: #fde68a;
 }
 
 .hv-pill.review .hv-pill-dot {
   background: var(--orange);
-  box-shadow: 0 0 10px rgba(255, 159, 10, 0.8);
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.8);
 }
 
 .hv-chip-btn {
@@ -149,8 +149,8 @@ body[data-state='working'] {
 }
 
 .hv-chip-btn.active {
-  background: rgba(10, 132, 255, 0.30);
-  border-color: rgba(100, 210, 255, 0.6);
+  background: rgba(255, 255, 255, 0.20);
+  border-color: rgba(255, 255, 255, 0.45);
   color: #fff;
 }
 
@@ -184,13 +184,15 @@ body[data-state='working'] {
 }
 
 .hv-spot-card.status-needs_input {
-  border-color: rgba(255, 69, 58, 0.55);
-  background: linear-gradient(155deg, rgba(255, 69, 58, 0.24) 0%, rgba(255, 255, 255, 0.06) 100%);
+  border-color: rgba(244, 63, 94, 0.32);
+  background: radial-gradient(75% 120% at 0% 50%, rgba(244, 63, 94, 0.10) 0%, transparent 55%), var(--card);
+  box-shadow: inset 4px 0 0 var(--red), inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
 .hv-spot-card.status-needs_attention {
-  border-color: rgba(255, 159, 10, 0.5);
-  background: linear-gradient(155deg, rgba(255, 159, 10, 0.18) 0%, rgba(255, 255, 255, 0.06) 100%);
+  border-color: rgba(251, 191, 36, 0.28);
+  background: radial-gradient(75% 120% at 0% 50%, rgba(251, 191, 36, 0.08) 0%, transparent 55%), var(--card);
+  box-shadow: inset 4px 0 0 var(--orange), inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
 .hv-card-head {
@@ -294,14 +296,16 @@ body[data-state='working'] {
 }
 
 .hv-btn.primary {
-  background: linear-gradient(180deg, #2693ff 0%, #0a84ff 100%);
-  box-shadow: 0 6px 20px rgba(10, 132, 255, 0.42);
+  background: linear-gradient(180deg, #fafafa 0%, #e4e4e7 100%);
+  border-color: rgba(255, 255, 255, 0.85);
+  color: #09090b;
+  box-shadow: 0 6px 20px rgba(255, 255, 255, 0.16);
 }
 
 .hv-btn.danger {
-  background: rgba(255, 69, 58, 0.26);
-  border-color: rgba(255, 69, 58, 0.55);
-  color: #ff9f99;
+  background: rgba(244, 63, 94, 0.16);
+  border-color: rgba(244, 63, 94, 0.45);
+  color: #fda4af;
 }
 
 .hv-calm-card {

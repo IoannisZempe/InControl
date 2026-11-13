@@ -54,7 +54,7 @@ export const DEFAULT_FUNCTIONS = [
 export const DEFAULT_SETTINGS = {
   logoStyle: 'orbit', // 'orbit' | 'reticle' | 'sliders'
   iconMode: 'both', // 'both' (Project + Tool badge) | 'tool' (ChatGPT/Claude/Codex/AG) | 'project'
-  theme: 'obsidian', // 'obsidian' | 'sapphire' | 'titanium'
+  theme: 'obsidian', // 'obsidian' | 'raycast' | 'hud' | 'titanium'
   dockSide: 'right', // 'right' | 'left'
   panelWidth: 386, // 348 | 386 | 436
   popupMode: 'needs_input', // 'needs_input' | 'urgent_and_review' | 'always'
@@ -92,8 +92,9 @@ function normalizeSettings(raw = {}) {
   const iconMode = ['both', 'tool', 'project'].includes(raw.iconMode)
     ? raw.iconMode
     : DEFAULT_SETTINGS.iconMode;
-  const theme = ['obsidian', 'sapphire', 'titanium'].includes(raw.theme)
-    ? raw.theme
+  const mappedTheme = raw.theme === 'sapphire' ? 'hud' : raw.theme;
+  const theme = ['obsidian', 'raycast', 'hud', 'titanium'].includes(mappedTheme)
+    ? mappedTheme
     : DEFAULT_SETTINGS.theme;
   const dockSide = ['right', 'left'].includes(raw.dockSide)
     ? raw.dockSide
