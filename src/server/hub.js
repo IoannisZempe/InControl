@@ -30,6 +30,11 @@ import {
   findProjectIconPath,
 } from './icons.js';
 import {
+  buildVoiceStatus,
+  handleVoiceRespond,
+} from './voice.js';
+import { createHomeKitBridge } from './homekit.js';
+import {
   loadOrCreateToken,
   checkOrigin,
   isAuthorized,
@@ -40,7 +45,14 @@ import {
 } from './auth.js';
 
 // Static files that may be served before pairing (no secrets in them).
-const PUBLIC_ASSETS = new Set(['/manifest.json', '/styles.css', '/app.js', '/icon.svg']);
+const PUBLIC_ASSETS = new Set([
+  '/manifest.json',
+  '/styles.css',
+  '/app.js',
+  '/homeview.css',
+  '/homeview.js',
+  '/icon.svg',
+]);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -92,7 +104,7 @@ export function discoverNetworkUrls(port) {
 }
 
 export async function createInControlHub(options = {}) {
-  const port = Number(options.port || process.env.INCONTROL_PORT || 4747);
+  const port = Number(options.port ?? process.env.INCONTROL_PORT ?? 4747);
   const host = options.host || (options.localOnly ? '127.0.0.1' : '0.0.0.0');
   const enableMacNotifications = options.macNotifications !== false;
   const token = options.token || loadOrCreateToken();
@@ -106,6 +118,17 @@ export async function createInControlHub(options = {}) {
   network.tailscalePairingUrl = network.tailscaleUrl
     ? `${network.tailscaleUrl}/?token=${encodeURIComponent(token)}`
     : null;
+  network.homeviewPairingUrl = `${network.primaryProjectionUrl}/homeview?token=${encodeURIComponent(token)}`;
+  network.homeviewTailscalePairingUrl = network.tailscaleUrl
+    ? `${network.tailscaleUrl}/homeview?token=${encodeURIComponent(token)}`
+    : null;
+  const homekit = createHomeKitBridge(store, {
+    getSettings: loadUserSettings,
+    advertise: options.advertiseHomeKit !== false,
+  });
+  if (options.homekit !== false && loadUserSettings().homekitEnabled) {
+    await homekit.start();
+  }
   const stopWhatsApp = setupWhatsAppEscalation(
     store,
     () => network.tailscalePairingUrl || network.pairingUrl
@@ -113,6 +136,14 @@ export async function createInControlHub(options = {}) {
   const allowedHosts = buildAllowedHosts(network, options.allowedHosts || []);
   // The QR code carries the pairing token so scanning it pairs the device in one step.
   const qrSvg = await QRCode.toString(network.pairingUrl, {
+    type: 'svg',
+    margin: 1,
+    color: {
+      dark: '#f8fafc',
+      light: '#00000000',
+    },
+  });
+  const homeviewQrSvg = await QRCode.toString(network.homeviewPairingUrl, {
     type: 'svg',
     margin: 1,
     color: {
@@ -145,7 +176,9 @@ export async function createInControlHub(options = {}) {
     const queryToken = parsedUrl.searchParams.get('token');
     if (req.method === 'GET' && queryToken && !pathname.startsWith('/api/')) {
       if (safeEqual(queryToken, token)) {
-        res.writeHead(302, { 'Set-Cookie': sessionCookie(token), Location: '/' });
+        const redirectTarget =
+          pathname === '/homeview' || pathname === '/homeview.html' ? '/homeview' : '/';
+        res.writeHead(302, { 'Set-Cookie': sessionCookie(token), Location: redirectTarget });
         res.end();
         return;
       }
@@ -163,7 +196,7 @@ export async function createInControlHub(options = {}) {
     try {
       // 1. GET /api/state — Full state snapshot
       if (req.method === 'GET' && pathname === '/api/state') {
-        return sendJson(res, 200, buildFullState(store, network, qrSvg));
+        return sendJson(res, 200, buildFullState(store, network, qrSvg, homekit));
       }
 
       // 2. POST /api/agents/event — Register or update agent state
@@ -258,7 +291,7 @@ export async function createInControlHub(options = {}) {
         const result = installIntegration(body.id);
         broadcast({
           type: 'state_sync',
-          state: buildFullState(store, network, qrSvg),
+          state: buildFullState(store, network, qrSvg, homekit),
         });
         return sendJson(res, 200, {
           ...result,
@@ -282,7 +315,7 @@ export async function createInControlHub(options = {}) {
         saveWhatsAppConfig(patch);
         broadcast({
           type: 'state_sync',
-          state: buildFullState(store, network, qrSvg),
+          state: buildFullState(store, network, qrSvg, homekit),
         });
         return sendJson(res, 200, {
           ok: true,
@@ -314,15 +347,77 @@ export async function createInControlHub(options = {}) {
 
       if (req.method === 'POST' && pathname === '/api/settings') {
         const body = await readJsonBody(req);
+        const prev = loadUserSettings();
         const updated = saveUserSettings(body);
+        if (options.homekit !== false && updated.homekitEnabled !== prev.homekitEnabled) {
+          if (updated.homekitEnabled) {
+            await homekit.start();
+          } else {
+            await homekit.stop();
+          }
+        }
         broadcast({
           type: 'state_sync',
-          state: buildFullState(store, network, qrSvg),
+          state: buildFullState(store, network, qrSvg, homekit),
         });
         return sendJson(res, 200, {
           ok: true,
           message: 'Saved InControl settings',
           settings: updated,
+          homekit: summarizeHomeKit(homekit),
+        });
+      }
+
+      // 10d. Apple Home / HomeView / Siri Voice Endpoints
+      if (req.method === 'GET' && pathname === '/api/voice/status') {
+        const voiceState = buildVoiceStatus(store, loadUserSettings());
+        const fmt = parsedUrl.searchParams.get('format');
+        if (fmt === 'text' || (req.headers.accept || '').includes('text/plain')) {
+          res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end(voiceState.speech);
+          return;
+        }
+        return sendJson(res, 200, voiceState);
+      }
+
+      if (req.method === 'POST' && pathname === '/api/voice/respond') {
+        const body = await readJsonBody(req);
+        const result = handleVoiceRespond(store, loadUserSettings(), body);
+        return sendJson(res, result.status, result);
+      }
+
+      if (req.method === 'GET' && pathname === '/api/apple-home') {
+        const settings = loadUserSettings();
+        const baseVoiceUrl = network.tailscaleUrl || network.primaryProjectionUrl;
+        return sendJson(res, 200, {
+          ok: true,
+          homeview: {
+            localUrl: `${network.localUrl}/homeview`,
+            pairingUrl: network.homeviewPairingUrl,
+            tailscalePairingUrl: network.homeviewTailscalePairingUrl,
+            qrSvg: homeviewQrSvg,
+          },
+          voice: {
+            allowVoiceApproval: settings.allowVoiceApproval,
+            statusUrl: `${baseVoiceUrl}/api/voice/status`,
+            statusTextUrl: `${baseVoiceUrl}/api/voice/status?format=text`,
+            respondUrl: `${baseVoiceUrl}/api/voice/respond`,
+            bearerToken: token,
+          },
+          homekit: homekit.getStatus(),
+        });
+      }
+
+      if (req.method === 'POST' && pathname === '/api/apple-home/homekit/reset') {
+        const hk = await homekit.resetPairing();
+        broadcast({
+          type: 'state_sync',
+          state: buildFullState(store, network, qrSvg, homekit),
+        });
+        return sendJson(res, 200, {
+          ok: true,
+          message: 'Reset HomeKit pairing and generated a new setup code',
+          homekit: hk,
         });
       }
 
@@ -370,8 +465,13 @@ export async function createInControlHub(options = {}) {
         return;
       }
 
-      // 11. Static file serving (Web UI / PWA)
-      let filePath = pathname === '/' ? path.join(PUBLIC_DIR, 'index.html') : path.join(PUBLIC_DIR, pathname);
+      // 11. Static file serving (Web UI / PWA & Apple HomeView Ambient Display)
+      let filePath =
+        pathname === '/'
+          ? path.join(PUBLIC_DIR, 'index.html')
+          : pathname === '/homeview'
+            ? path.join(PUBLIC_DIR, 'homeview.html')
+            : path.join(PUBLIC_DIR, pathname);
       // Prevent directory traversal (including sibling-prefix paths)
       const relPath = path.relative(PUBLIC_DIR, filePath);
       if (relPath.startsWith('..') || path.isAbsolute(relPath)) {
@@ -422,7 +522,7 @@ export async function createInControlHub(options = {}) {
     broadcast({
       type: 'state_sync',
       changeEvent,
-      state: buildFullState(store, network, qrSvg),
+      state: buildFullState(store, network, qrSvg, homekit),
     });
   });
 
@@ -443,7 +543,7 @@ export async function createInControlHub(options = {}) {
     ws.send(
       JSON.stringify({
         type: 'state_sync',
-        state: buildFullState(store, network, qrSvg),
+        state: buildFullState(store, network, qrSvg, homekit),
       })
     );
 
@@ -472,24 +572,40 @@ export async function createInControlHub(options = {}) {
     wss,
     store,
     network,
+    homekit,
     port,
     token,
-    close: () =>
-      new Promise((resolve) => {
-        stopAutoWatcher();
-        stopWhatsApp();
-        wss.close();
-        server.close(() => resolve());
-      }),
+    close: async () => {
+      stopAutoWatcher();
+      stopWhatsApp();
+      await homekit.stop();
+      wss.close();
+      await new Promise((resolve) => server.close(() => resolve()));
+    },
   };
 }
 
-function buildFullState(store, network, qrSvg) {
+function summarizeHomeKit(homekit) {
+  if (!homekit) return null;
+  const s = homekit.getStatus();
+  return {
+    enabled: s.enabled,
+    allowApproval: s.allowApproval,
+    running: s.running,
+    paired: s.paired,
+    accessoryName: s.accessoryName,
+    waitingCount: s.waitingCount,
+    error: s.error,
+  };
+}
+
+function buildFullState(store, network, qrSvg, homekit) {
   return {
     agents: store.getSortedAgents(),
     counts: store.getSummaryCounts(),
     integrations: getIntegrationsStatus(),
     whatsapp: getPublicWhatsAppStatus(),
+    homekit: summarizeHomeKit(homekit),
     settings: loadUserSettings(),
     network,
     qrSvg,

@@ -4,7 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 
-const CONFIG_DIR = path.join(os.homedir(), '.incontrol');
+const CONFIG_DIR = process.env.INCONTROL_HOME || path.join(os.homedir(), '.incontrol');
 const SETTINGS_PATH = path.join(CONFIG_DIR, 'settings.json');
 
 // Strict allowlist of built-in read-only/safe workspace commands (prevents arbitrary command execution via API)
@@ -59,6 +59,9 @@ export const DEFAULT_SETTINGS = {
   panelWidth: 386, // 348 | 386 | 436
   popupMode: 'needs_input', // 'needs_input' | 'urgent_and_review' | 'always'
   showFunctionBar: true,
+  allowVoiceApproval: false, // Siri / voice shortcuts can read status by default; approvals are opt-in
+  homekitEnabled: false, // Apple Home (HomeKit HAP bridge)
+  allowHomekitApproval: true, // HomeKit "Approve Waiting Agent" switch
   customFunctions: DEFAULT_FUNCTIONS,
 };
 
@@ -101,6 +104,14 @@ function normalizeSettings(raw = {}) {
     : DEFAULT_SETTINGS.popupMode;
   const showFunctionBar =
     typeof raw.showFunctionBar === 'boolean' ? raw.showFunctionBar : DEFAULT_SETTINGS.showFunctionBar;
+  const allowVoiceApproval =
+    typeof raw.allowVoiceApproval === 'boolean' ? raw.allowVoiceApproval : DEFAULT_SETTINGS.allowVoiceApproval;
+  const homekitEnabled =
+    typeof raw.homekitEnabled === 'boolean' ? raw.homekitEnabled : DEFAULT_SETTINGS.homekitEnabled;
+  const allowHomekitApproval =
+    typeof raw.allowHomekitApproval === 'boolean'
+      ? raw.allowHomekitApproval
+      : DEFAULT_SETTINGS.allowHomekitApproval;
 
   let customFunctions = DEFAULT_FUNCTIONS;
   if (Array.isArray(raw.customFunctions)) {
@@ -134,6 +145,9 @@ function normalizeSettings(raw = {}) {
     panelWidth,
     popupMode,
     showFunctionBar,
+    allowVoiceApproval,
+    homekitEnabled,
+    allowHomekitApproval,
     customFunctions,
   };
 }

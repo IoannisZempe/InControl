@@ -196,3 +196,133 @@ test('settings & custom functions: configure logo/theme and execute prompt funct
     await hub.close();
   }
 });
+
+test('apple homeview & siri voice: pairing redirect, spoken status, and opt-in voice approval', async () => {
+  const hub = await createInControlHub({
+    port: 0,
+    strict: true,
+    token: 'hv-secret-token',
+    macNotifications: false,
+    autoWatch: false,
+    homekit: false,
+  });
+  const port = hub.server.address().port;
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const authHeader = { Authorization: 'Bearer hv-secret-token' };
+
+  try {
+    // 1. Unauthorized access to /homeview is blocked
+    const unauth = await fetch(`${baseUrl}/homeview`);
+    assert.equal(unauth.status, 401);
+
+    // 2. Pairing to /homeview?token=... sets HttpOnly cookie and strips token via redirect back to /homeview
+    const pairRes = await fetch(`${baseUrl}/homeview?token=hv-secret-token`, { redirect: 'manual' });
+    assert.equal(pairRes.status, 302);
+    assert.equal(pairRes.headers.get('location'), '/homeview');
+    const cookie = pairRes.headers.get('set-cookie').split(';')[0];
+
+    const hvHtmlRes = await fetch(`${baseUrl}/homeview`, { headers: { Cookie: cookie } });
+    assert.equal(hvHtmlRes.status, 200);
+    assert.match(await hvHtmlRes.text(), /Apple HomeView/i);
+
+    // 3. Create waiting agent and query Siri voice summary
+    const origSettings = (await (await fetch(`${baseUrl}/api/settings`, { headers: authHeader })).json()).settings;
+    await fetch(`${baseUrl}/api/settings`, {
+      method: 'POST',
+      headers: { ...authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allowVoiceApproval: false }),
+    });
+
+    const askPromise = fetch(`${baseUrl}/api/agents/ask`, {
+      method: 'POST',
+      headers: { ...authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: 'hv-agent-1',
+        name: 'Claude',
+        workspace: '/tmp/nova-app',
+        question: 'Run migration script?',
+        wait: true,
+      }),
+    }).then((r) => r.json());
+
+    await new Promise((r) => setTimeout(r, 80));
+
+    const speechText = await (
+      await fetch(`${baseUrl}/api/voice/status?format=text`, { headers: authHeader })
+    ).text();
+    assert.match(speechText, /1 agent needs your input/i);
+    assert.match(speechText, /nova-app/i);
+
+    // 4. Security check: voice approval blocked (403) when allowVoiceApproval is false
+    const blockedVoice = await fetch(`${baseUrl}/api/voice/respond`, {
+      method: 'POST',
+      headers: { ...authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision: 'approve' }),
+    });
+    assert.equal(blockedVoice.status, 403);
+
+    // 5. Enable allowVoiceApproval -> Siri approval resolves the waiting agent
+    await fetch(`${baseUrl}/api/settings`, {
+      method: 'POST',
+      headers: { ...authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allowVoiceApproval: true }),
+    });
+
+    const voiceRes = await fetch(`${baseUrl}/api/voice/respond`, {
+      method: 'POST',
+      headers: { ...authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision: 'approve' }),
+    });
+    assert.equal(voiceRes.status, 200);
+    const voiceBody = await voiceRes.json();
+    assert.equal(voiceBody.ok, true);
+    assert.match(voiceBody.speech, /Approved/i);
+
+    const decision = await askPromise;
+    assert.equal(decision.action, 'approve');
+    assert.equal(decision.sourceDevice, 'Siri');
+
+    // Restore original settings
+    await fetch(`${baseUrl}/api/settings`, {
+      method: 'POST',
+      headers: { ...authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify(origSettings),
+    });
+  } finally {
+    await hub.close();
+  }
+});
+
+test('apple homekit bridge: publishes Waiting sensor & Approve switch with valid generated PIN', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { createHomeKitBridge } = await import('../src/server/homekit.js');
+  const { AgentStore } = await import('../src/server/store.js');
+
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'incontrol-hk-test-'));
+  const prevHome = process.env.INCONTROL_HOME;
+  process.env.INCONTROL_HOME = tmpHome;
+
+  const store = new AgentStore();
+  const hk = createHomeKitBridge(store, {
+    getSettings: () => ({ homekitEnabled: true, allowHomekitApproval: true }),
+    advertise: false,
+  });
+
+  try {
+    const status = await hk.start();
+    assert.equal(status.running, true);
+    assert.match(status.pincode, /^\d{3}-\d{2}-\d{3}$/);
+    assert.ok(status.setupUri.startsWith('X-HM://'));
+    assert.match(status.setupQrSvg, /<svg/);
+
+    store.upsertAgent({ id: 'hk-1', name: 'Codex', status: 'needs_input', pendingPrompt: { question: 'Deploy?' } });
+    assert.equal(hk.getStatus().waitingCount, 1);
+  } finally {
+    await hk.stop({ destroyPairing: true });
+    if (prevHome === undefined) delete process.env.INCONTROL_HOME;
+    else process.env.INCONTROL_HOME = prevHome;
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
+});

@@ -299,6 +299,15 @@ function applySettingsToUI() {
   if ($('#cfg-dock-side')) $('#cfg-dock-side').value = s.dockSide || 'right';
   if ($('#cfg-panel-width')) $('#cfg-panel-width').value = String(s.panelWidth || 386);
   if ($('#cfg-show-functions')) $('#cfg-show-functions').checked = s.showFunctionBar !== false;
+  if ($('#cfg-voice-approval')) $('#cfg-voice-approval').checked = Boolean(s.allowVoiceApproval);
+  if ($('#cfg-homekit-enabled')) $('#cfg-homekit-enabled').checked = Boolean(s.homekitEnabled);
+  if ($('#cfg-homekit-approve')) $('#cfg-homekit-approve').checked = s.allowHomekitApproval !== false;
+  const ahBadge = $('#apple-home-badge');
+  if (ahBadge) {
+    const hkOn = Boolean(s.homekitEnabled);
+    ahBadge.textContent = hkOn ? 'HomeKit' : 'Ready';
+    ahBadge.classList.toggle('active', hkOn);
+  }
 
   // Sync native macOS panel geometry & pop-up mode
   window.webkit?.messageHandlers?.panelConfig?.postMessage({
@@ -690,9 +699,18 @@ syncSoundIcons();
 // ---------------- Event Listeners ----------------
 document.addEventListener('click', async (e) => {
   const el = e.target.closest(
-    '[data-act], [data-close], [data-copy-target], [data-copy-text], [data-settings-tab], [data-logo-choice], .filter-pill, .conn-tab'
+    '[data-act], [data-close], [data-copy-target], [data-copy-text], [data-settings-tab], [data-apple-tab], [data-logo-choice], .filter-pill, .conn-tab'
   );
   if (!el) return;
+
+  if (el.dataset.appleTab) {
+    const tab = el.dataset.appleTab;
+    $$('.apple-tab').forEach((t) => t.classList.toggle('active', t.dataset.appleTab === tab));
+    $('#apple-pane-display')?.classList.toggle('hidden', tab !== 'display');
+    $('#apple-pane-siri')?.classList.toggle('hidden', tab !== 'siri');
+    $('#apple-pane-homekit')?.classList.toggle('hidden', tab !== 'homekit');
+    return;
+  }
 
   if (el.dataset.settingsTab) {
     const tab = el.dataset.settingsTab;
@@ -950,6 +968,75 @@ $('#cfg-popup-mode')?.addEventListener('change', (e) => saveSettingsPatch({ popu
 $('#cfg-dock-side')?.addEventListener('change', (e) => saveSettingsPatch({ dockSide: e.target.value }));
 $('#cfg-panel-width')?.addEventListener('change', (e) => saveSettingsPatch({ panelWidth: Number(e.target.value) }));
 $('#cfg-show-functions')?.addEventListener('change', (e) => saveSettingsPatch({ showFunctionBar: e.target.checked }));
+$('#cfg-voice-approval')?.addEventListener('change', async (e) => {
+  await saveSettingsPatch({ allowVoiceApproval: e.target.checked });
+  toast(e.target.checked ? 'Siri voice approvals enabled' : 'Siri voice approvals turned off');
+});
+$('#cfg-homekit-enabled')?.addEventListener('change', async (e) => {
+  await saveSettingsPatch({ homekitEnabled: e.target.checked });
+  await refreshAppleHomeModal();
+  toast(e.target.checked ? 'Apple HomeKit Bridge started' : 'Apple HomeKit Bridge stopped');
+});
+$('#cfg-homekit-approve')?.addEventListener('change', async (e) => {
+  await saveSettingsPatch({ allowHomekitApproval: e.target.checked });
+  toast(e.target.checked ? 'HomeKit Approve switch enabled' : 'HomeKit Approve switch disabled');
+});
+
+async function refreshAppleHomeModal() {
+  try {
+    const res = await fetch('/api/apple-home');
+    const data = await res.json();
+    if (!data.ok) return;
+
+    const hv = data.homeview || {};
+    $('#hv-qr-container').innerHTML = hv.qrSvg || '';
+    $('#hv-url-primary').textContent = hv.pairingUrl || `${location.origin}/homeview`;
+    if (hv.tailscalePairingUrl) {
+      $('#hv-tailscale-row').classList.remove('hidden');
+      $('#hv-url-tailscale').textContent = hv.tailscalePairingUrl;
+    } else {
+      $('#hv-tailscale-row').classList.add('hidden');
+    }
+    const openLink = $('#btn-open-homeview');
+    if (openLink) openLink.href = DEMO_MODE ? '/homeview?demo=1' : '/homeview';
+
+    const voice = data.voice || {};
+    $('#siri-url-status').textContent = voice.statusTextUrl || '';
+    $('#siri-url-respond').textContent = voice.respondUrl || '';
+    $('#siri-bearer-token').textContent = voice.bearerToken || '';
+    if ($('#cfg-voice-approval')) $('#cfg-voice-approval').checked = Boolean(voice.allowVoiceApproval);
+
+    const hk = data.homekit || {};
+    if ($('#cfg-homekit-enabled')) $('#cfg-homekit-enabled').checked = Boolean(hk.enabled);
+    if ($('#cfg-homekit-approve')) $('#cfg-homekit-approve').checked = hk.allowApproval !== false;
+    const activeArea = $('#hk-active-area');
+    if (hk.enabled && hk.running) {
+      activeArea?.classList.remove('hidden');
+      $('#hk-qr-container').innerHTML = hk.setupQrSvg || '';
+      $('#hk-pincode').textContent = hk.pincode || '';
+      $('#hk-pairing-status').textContent = hk.paired
+        ? 'Paired with Apple Home'
+        : 'Ready to pair — scan in Apple Home app';
+    } else {
+      activeArea?.classList.add('hidden');
+      if (hk.error) toast(hk.error);
+    }
+  } catch {}
+}
+
+$('#btn-apple-home')?.addEventListener('click', async () => {
+  $('#advanced-drawer')?.classList.add('hidden');
+  $('#btn-advanced')?.classList.remove('active');
+  $('#modal-apple-home')?.classList.remove('hidden');
+  await refreshAppleHomeModal();
+});
+
+$('#btn-hk-reset')?.addEventListener('click', async () => {
+  const res = await fetch('/api/apple-home/homekit/reset', { method: 'POST' });
+  const data = await res.json().catch(() => ({}));
+  await refreshAppleHomeModal();
+  toast(data.message || 'HomeKit pairing reset');
+});
 
 function syncWhatsAppProviderPane(provider) {
   $$('.wa-provider-pane').forEach((p) => p.classList.add('hidden'));

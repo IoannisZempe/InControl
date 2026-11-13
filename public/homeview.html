@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0a0c14" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <link rel="manifest" href="/manifest.json" />
+  <title>InControl · Apple HomeView</title>
+  <link rel="stylesheet" href="/homeview.css?v=1" />
+</head>
+<body data-state="idle">
+  <div class="hv-shell">
+    <!-- Top Ambient Header: Time, Brand, Urgent Pill -->
+    <header class="hv-header">
+      <div class="hv-clock-block">
+        <div id="hv-time" class="hv-time">08:00</div>
+        <div id="hv-date" class="hv-date">Friday · Apple HomeView</div>
+      </div>
+
+      <div class="hv-status-cluster">
+        <span id="hv-pill" class="hv-pill calm">
+          <span class="hv-pill-dot"></span>
+          <span id="hv-pill-text">Connecting…</span>
+        </span>
+        <button id="hv-demo-btn" class="hv-chip-btn" type="button" title="Toggle Demo Projects">Demo</button>
+        <a href="/" class="hv-chip-btn" title="Open Full Panel">Panel</a>
+      </div>
+    </header>
+
+    <!-- Main Smart-Display Stage -->
+    <main class="hv-stage">
+      <!-- Left / Primary Attention Zone -->
+      <section class="hv-primary" id="hv-primary"></section>
+
+      <!-- Right / Active Fleet Rail -->
+      <aside class="hv-rail">
+        <div class="hv-rail-title">Fleet Status</div>
+        <div id="hv-fleet" class="hv-fleet"></div>
+      </aside>
+    </main>
+  </div>
+
+  <div id="hv-toast" class="hv-toast hidden"></div>
+  <script src="/homeview.js?v=1" type="module"></script>
+</body>
+</html>

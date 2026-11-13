@@ -1539,6 +1539,16 @@ html.macos-panel .panel-only-btn {
   margin-bottom: 10px;
 }
 
+.settings-tabs-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.hk-active-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .settings-tab {
   height: 26px;
   border-radius: 7px;

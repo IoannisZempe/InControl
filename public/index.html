@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="manifest" href="/manifest.json" />
   <title>InControl</title>
-  <link rel="stylesheet" href="/styles.css?v=9" />
+  <link rel="stylesheet" href="/styles.css?v=10" />
 </head>
 <body data-theme="obsidian" data-logo="orbit">
   <div class="app-shell">
@@ -153,6 +153,16 @@
               <span>Demo Mode</span>
             </span>
             <span id="demo-menu-badge" class="adv-item-badge">Off</span>
+          </button>
+
+          <button id="btn-apple-home" class="adv-menu-item" type="button" title="Apple HomeView Display, Siri Voice Shortcuts & HomeKit Bridge">
+            <span class="adv-item-left">
+              <span class="adv-item-icon">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+              </span>
+              <span>Apple HomeView</span>
+            </span>
+            <span id="apple-home-badge" class="adv-item-badge">Ready</span>
           </button>
         </div>
       </div>
@@ -488,6 +498,115 @@ incontrol wrap --name "Aider" -- aider</pre>
     </div>
   </div>
 
-  <script src="/app.js?v=9" type="module"></script>
+  <!-- Modal: Apple HomeView, Siri Voice & HomeKit Bridge -->
+  <div id="modal-apple-home" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-apple-home-title">
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <h2 id="modal-apple-home-title">Apple HomeView & HomeKit</h2>
+        <button class="modal-close" data-close="modal-apple-home" aria-label="Close">✕</button>
+      </div>
+
+      <div class="settings-tabs settings-tabs-3">
+        <button type="button" class="settings-tab apple-tab active" data-apple-tab="display">HomeView</button>
+        <button type="button" class="settings-tab apple-tab" data-apple-tab="siri">Siri Voice</button>
+        <button type="button" class="settings-tab apple-tab" data-apple-tab="homekit">HomeKit</button>
+      </div>
+
+      <!-- Tab 1: HomeView Ambient Display -->
+      <div id="apple-pane-display" class="settings-pane">
+        <p class="modal-subtitle">
+          Open the large-type, touch-first Ambient Display on Apple HomeView, iPad StandBy, or a secondary monitor.
+        </p>
+        <div id="hv-qr-container" class="qr-box"></div>
+        <div class="url-list">
+          <div class="url-row">
+            <span class="url-badge">Display</span>
+            <code id="hv-url-primary" class="url-code"></code>
+            <button class="copy-btn" data-copy-target="hv-url-primary">Copy</button>
+          </div>
+          <div id="hv-tailscale-row" class="url-row hidden">
+            <span class="url-badge tailscale">Tailscale</span>
+            <code id="hv-url-tailscale" class="url-code"></code>
+            <button class="copy-btn" data-copy-target="hv-url-tailscale">Copy</button>
+          </div>
+        </div>
+        <div class="wa-actions">
+          <a id="btn-open-homeview" class="btn-decision primary" href="/homeview" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none;">Open HomeView Display</a>
+        </div>
+      </div>
+
+      <!-- Tab 2: Siri Voice Shortcuts -->
+      <div id="apple-pane-siri" class="settings-pane hidden">
+        <p class="modal-subtitle">
+          Ask HomeView or HomePod "What are my agents doing?" via Apple Shortcuts. Status reading is always enabled; voice approvals are off by default for safety.
+        </p>
+
+        <label class="wa-toggle-row">
+          <span>Allow Siri / voice commands to approve & deny agents</span>
+          <input type="checkbox" id="cfg-voice-approval" />
+        </label>
+
+        <div class="url-list">
+          <div class="url-row">
+            <span class="url-badge">GET</span>
+            <code id="siri-url-status" class="url-code"></code>
+            <button class="copy-btn" data-copy-target="siri-url-status">Copy</button>
+          </div>
+          <div class="url-row">
+            <span class="url-badge">POST</span>
+            <code id="siri-url-respond" class="url-code"></code>
+            <button class="copy-btn" data-copy-target="siri-url-respond">Copy</button>
+          </div>
+          <div class="url-row">
+            <span class="url-badge">Bearer</span>
+            <code id="siri-bearer-token" class="url-code"></code>
+            <button class="copy-btn" data-copy-target="siri-bearer-token">Copy</button>
+          </div>
+        </div>
+
+        <div class="wa-hint">
+          <strong>Shortcuts Setup (3 steps):</strong><br/>
+          1. Add <em>Get Contents of URL</em> with the <code>GET</code> link and header <code>Authorization: Bearer &lt;token&gt;</code>.<br/>
+          2. Add <em>Speak Text</em> using the returned text.<br/>
+          3. For voice approval, <code>POST</code> JSON <code>{"decision":"approve"}</code> to the respond URL.
+        </div>
+      </div>
+
+      <!-- Tab 3: Local Apple HomeKit Accessory -->
+      <div id="apple-pane-homekit" class="settings-pane hidden">
+        <p class="modal-subtitle">
+          Expose InControl natively on your Apple Home & HomeView grid as an <strong>Agent Needs Input</strong> motion sensor + an <strong>Approve Waiting Agent</strong> switch.
+        </p>
+
+        <label class="wa-toggle-row">
+          <span>Enable Apple HomeKit Bridge</span>
+          <input type="checkbox" id="cfg-homekit-enabled" />
+        </label>
+
+        <label class="wa-toggle-row">
+          <span>Allow HomeKit "Approve Waiting Agent" switch</span>
+          <input type="checkbox" id="cfg-homekit-approve" checked />
+        </label>
+
+        <div id="hk-active-area" class="hk-active-area hidden">
+          <div id="hk-qr-container" class="qr-box"></div>
+          <div class="url-list">
+            <div class="url-row">
+              <span class="url-badge">PIN</span>
+              <code id="hk-pincode" class="url-code"></code>
+              <button class="copy-btn" data-copy-target="hk-pincode">Copy</button>
+            </div>
+            <div class="url-row">
+              <span class="url-badge">State</span>
+              <code id="hk-pairing-status" class="url-code"></code>
+              <button type="button" id="btn-hk-reset" class="copy-btn">Reset Pair</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js?v=10" type="module"></script>
 </body>
 </html>
