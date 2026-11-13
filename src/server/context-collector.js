@@ -34,6 +34,59 @@ function getSnapshotPath(day = formatLocalDay()) {
   return path.join(getHistoryDir(), `${day}.snapshot.json`);
 }
 
+function getHandoffsPath(day = formatLocalDay()) {
+  return path.join(getHistoryDir(), `${day}.handoffs.json`);
+}
+
+export function readHandoffNotes(day = formatLocalDay()) {
+  if (!isValidDayString(day)) return [];
+  const p = getHandoffsPath(day);
+  if (!fs.existsSync(p)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveHandoffNote(note = {}) {
+  const day = isValidDayString(note.day) ? note.day : formatLocalDay();
+  const entry = {
+    id: `ho_${Date.now().toString(36)}`,
+    createdAt: new Date().toISOString(),
+    day,
+    projectName: cleanSnippet(note.projectName || note.project || (note.workspace ? path.basename(note.workspace) : ''), 100),
+    workspace: String(note.workspace || '').slice(0, 300),
+    provider: cleanSnippet(note.provider || '', 40),
+    fromAgent: cleanSnippet(note.fromAgent || note.agentName || '', 80),
+    goal: cleanSnippet(note.goal || '', 400),
+    summary: cleanSnippet(note.summary || '', 2000),
+    nextSteps: cleanSnippet(note.nextSteps || '', 1200),
+  };
+
+  try {
+    fs.mkdirSync(getHistoryDir(), { recursive: true, mode: 0o700 });
+    const existing = readHandoffNotes(day);
+    const updated = [entry, ...existing].slice(0, 50);
+    fs.writeFileSync(getHandoffsPath(day), JSON.stringify(updated, null, 2) + '\n', { mode: 0o600 });
+  } catch {}
+
+  appendDailyEvent({
+    timestamp: Date.now(),
+    type: 'handoff',
+    agentId: note.agentId || '',
+    agentName: entry.fromAgent || 'Agent',
+    provider: entry.provider || 'custom',
+    projectName: entry.projectName || '',
+    workspace: entry.workspace || '',
+    status: 'idle',
+    message: `Saved handoff${entry.goal ? `: ${entry.goal}` : ''}`,
+  });
+
+  return entry;
+}
+
 /**
  * Append a compact structured event to today's persistent JSONL history ledger.
  */
@@ -549,7 +602,24 @@ export async function captureDailyContext(store, options = {}) {
     logs: (a.logs || []).slice(0, 20).map((l) => ({ ...l, message: redactSecrets(l.message) })),
   }));
 
-  const aiSessions = collectLocalAiSessionsToday(day, options.roots);
+  const aiSessions = collectLocalAiSessionsToday(day, options.roots).map((s) => {
+    if (s.provider === 'antigravity' && s.sessionId && (!s.workspace || !s.projectName)) {
+      const agyId = `agy-${s.sessionId.slice(0, 8)}`;
+      const matched =
+        sanitizedAgents.find((a) => a.id === agyId) ||
+        events.find((ev) => ev.agentId === agyId && ev.workspace);
+      if (matched) {
+        return {
+          ...s,
+          workspace: s.workspace || matched.workspace || '',
+          projectName: s.projectName || matched.projectName || (matched.workspace ? path.basename(matched.workspace) : ''),
+          branch: s.branch || matched.branch || null,
+        };
+      }
+    }
+    return s;
+  });
+  const handoffs = readHandoffNotes(day);
 
   const activeWorkspaceSet = new Set();
   for (const a of sanitizedAgents) {
@@ -623,6 +693,7 @@ export async function captureDailyContext(store, options = {}) {
     events,
     workspaces,
     aiSessions,
+    handoffs,
   };
 
   try {
@@ -724,4 +795,183 @@ export async function fetchRailwayDay(day, settings) {
     return { ok: false, error: data.error || `HTTP ${resp.status}` };
   }
   return { ok: true, day: data.day, collection: data.collection };
+}
+
+function matchesContextFilter(item = {}, filters = {}) {
+  const projectQ = String(filters.project || '').trim().toLowerCase();
+  const workspaceQ = String(filters.workspace || '').trim().toLowerCase();
+  const providerQ = String(filters.provider || '').trim().toLowerCase();
+  const sessionQ = String(filters.sessionId || '').trim().toLowerCase();
+  const agentQ = String(filters.agentId || '').trim().toLowerCase();
+
+  if (sessionQ) {
+    const sid = String(item.sessionId || '').toLowerCase();
+    if (!sid || !sid.includes(sessionQ)) return false;
+  }
+  if (agentQ) {
+    const aid = String(item.id || item.agentId || '').toLowerCase();
+    if (aid && !aid.includes(agentQ)) return false;
+  }
+  if (providerQ) {
+    const prov = String(item.provider || '').toLowerCase();
+    if (prov && prov !== providerQ) return false;
+  }
+  if (workspaceQ) {
+    const wp = String(item.workspace || '').toLowerCase();
+    if (!wp || (wp !== workspaceQ && !wp.includes(workspaceQ))) return false;
+  }
+  if (projectQ) {
+    const pn = String(item.projectName || (item.workspace ? path.basename(item.workspace) : '') || item.title || '').toLowerCase();
+    if (!pn.includes(projectQ)) return false;
+  }
+  return true;
+}
+
+/**
+ * Build a portable Markdown + structured handoff brief from live local context or an archived Railway/local day.
+ * Lets any IDE or AI agent pull full sanitized context across sessions via InControl MCP.
+ */
+export async function buildPortableContextBrief({
+  store = null,
+  settings = {},
+  day = null,
+  project = '',
+  workspace = '',
+  provider = '',
+  sessionId = '',
+  agentId = '',
+} = {}) {
+  const today = formatLocalDay();
+  const targetDay = isValidDayString(day) ? day : today;
+  let source = 'live';
+  let collection = null;
+
+  if (targetDay === today && store) {
+    collection = await captureDailyContext(store, { day: targetDay });
+  } else {
+    if (settings?.railwayUrl && settings?.railwayToken) {
+      const remote = await fetchRailwayDay(targetDay, settings);
+      if (remote.ok && remote.collection) {
+        collection = remote.collection;
+        source = 'railway';
+      }
+    }
+    if (!collection) {
+      const local = readLocalSnapshot(targetDay);
+      if (local) {
+        collection = local;
+        source = 'local';
+      } else if (targetDay === today) {
+        collection = await captureDailyContext(store, { day: targetDay });
+      }
+    }
+  }
+
+  if (!collection) {
+    return { ok: false, error: `No context snapshot found for ${targetDay}` };
+  }
+
+  const filters = { project, workspace, provider, sessionId, agentId };
+  const hasFilter = Boolean(project || workspace || provider || sessionId || agentId);
+
+  const workspaces = (collection.workspaces || []).filter((w) => matchesContextFilter(w, filters));
+  const aiSessions = (collection.aiSessions || []).filter((s) => matchesContextFilter(s, filters));
+  const agents = (collection.agents || []).filter((a) => matchesContextFilter(a, filters));
+  const handoffs = (collection.handoffs || []).filter((h) => matchesContextFilter(h, filters));
+  const events = (collection.events || []).filter((ev) => matchesContextFilter(ev, filters)).slice(0, 20);
+
+  // Build crisp portable Markdown suitable for pasting or MCP injection into another IDE/agent
+  const lines = [];
+  lines.push(`# InControl Handoff Context (${targetDay})`);
+  lines.push(
+    `Source: \`${source}\` · Device: \`${collection.device || os.hostname()}\`${
+      project ? ` · Project: **${project}**` : ''
+    }${workspace ? ` · Workspace: \`${workspace}\`` : ''}${provider ? ` · Provider: \`${provider}\`` : ''}`
+  );
+  lines.push('');
+
+  if (handoffs.length) {
+    lines.push('## Explicit Handoff Checkpoints');
+    for (const h of handoffs.slice(0, 5)) {
+      lines.push(`### ${h.projectName || h.fromAgent || 'Checkpoint'} (${h.createdAt})`);
+      if (h.goal) lines.push(`- **Goal:** ${h.goal}`);
+      if (h.summary) lines.push(`- **Summary:** ${h.summary}`);
+      if (h.nextSteps) lines.push(`- **Next steps:** ${h.nextSteps}`);
+      lines.push('');
+    }
+  }
+
+  if (workspaces.length) {
+    lines.push('## Workspaces & Git State');
+    for (const w of workspaces.slice(0, 8)) {
+      lines.push(`### ${w.projectName || path.basename(w.workspace)} (\`${w.branch || 'no-branch'}\`) — \`${w.workspace}\``);
+      if (w.commitsToday?.length) {
+        lines.push('- **Commits today:**');
+        for (const c of w.commitsToday.slice(0, 10)) {
+          lines.push(`  - \`${c.hash}\` ${c.subject}`);
+        }
+      }
+      if (w.changedFiles?.length) {
+        lines.push(`- **Working tree (${w.changedFiles.length} changed):** ${w.changedFiles.slice(0, 15).map((f) => `\`${f}\``).join(', ')}`);
+      }
+      lines.push('');
+    }
+  }
+
+  if (aiSessions.length) {
+    lines.push('## AI Sessions');
+    for (const s of aiSessions.slice(0, 10)) {
+      lines.push(`### [${s.provider}] ${s.title || s.sessionId}`);
+      if (s.workspace) lines.push(`- **Workspace:** \`${s.workspace}\`${s.branch ? ` (${s.branch})` : ''}`);
+      if (s.userPrompts?.length) {
+        lines.push('- **Recent user prompts:**');
+        for (const p of s.userPrompts.slice(-6)) {
+          lines.push(`  - ${p}`);
+        }
+      }
+      if (s.lastSummary) {
+        lines.push(`- **Last assistant summary:** ${s.lastSummary}`);
+      }
+      if (s.artifacts?.length) {
+        lines.push('- **Artifacts / plan notes:**');
+        for (const art of s.artifacts) {
+          lines.push(`  - **${art.file}:** ${art.excerpt}`);
+        }
+      }
+      lines.push('');
+    }
+  }
+
+  if (agents.length) {
+    lines.push('## Live Connected Agents');
+    for (const a of agents.slice(0, 10)) {
+      lines.push(`- **${a.projectName}** (${a.name} · \`${a.status}\`): ${a.currentTask || a.currentStep || 'Active'}`);
+    }
+    lines.push('');
+  }
+
+  if (!handoffs.length && !workspaces.length && !aiSessions.length && !agents.length && hasFilter) {
+    lines.push('_No matching sessions or workspaces found for the given filter._');
+  }
+
+  const brief = {
+    day: targetDay,
+    source,
+    device: collection.device || os.hostname(),
+    filters,
+    handoffs,
+    workspaces,
+    aiSessions,
+    agents,
+    events,
+  };
+
+  return {
+    ok: true,
+    source,
+    day: targetDay,
+    summary: collection.summary,
+    markdown: lines.join('\n').trim(),
+    brief,
+  };
 }

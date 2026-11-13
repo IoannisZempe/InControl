@@ -636,3 +636,116 @@ test('railway setup: dry-run, first-time provisioning with staging, stdin secret
   assert.equal(res2.projectId, 'proj-123');
   assert.ok(!rerunCalls.some((c) => c[1] === 'init' || c[1] === 'add'));
 });
+
+test('mcp cross-ide handoff: save_handoff, list_context, and get_context port sanitized context over MCP', async () => {
+  const { spawn } = await import('node:child_process');
+  const readline = await import('node:readline');
+  const prevScan = process.env.INCONTROL_DISABLE_HOME_SCAN;
+  process.env.INCONTROL_DISABLE_HOME_SCAN = '1';
+
+  const hub = await createInControlHub({
+    port: 4805,
+    macNotifications: false,
+    token: 'mcp-ctx-tok',
+    autoWatch: false,
+    homekit: false,
+  });
+  const baseUrl = 'http://localhost:4805';
+
+  // Register an active agent on the hub first
+  await fetch(`${baseUrl}/api/agents/event`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer mcp-ctx-tok', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: 'source-agy',
+      name: 'Antigravity',
+      provider: 'antigravity',
+      workspace: process.cwd(),
+      currentTask: 'Build MCP context portability',
+      currentStep: 'Writing cross-IDE handoff tool',
+    }),
+  });
+
+  const child = spawn(process.execPath, ['bin/incontrol.js', 'mcp', '--ide', 'Cursor', '--provider', 'cursor'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      INCONTROL_URL: baseUrl,
+      INCONTROL_TOKEN: 'mcp-ctx-tok',
+      INCONTROL_HOME: suiteHome,
+      INCONTROL_DISABLE_HOME_SCAN: '1',
+    },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+
+  const rl = readline.createInterface({ input: child.stdout });
+  const pending = new Map();
+  rl.on('line', (line) => {
+    try {
+      const msg = JSON.parse(line);
+      if (msg.id !== undefined && pending.has(msg.id)) {
+        pending.get(msg.id)(msg);
+        pending.delete(msg.id);
+      }
+    } catch {}
+  });
+
+  let nextId = 1;
+  const rpc = (method, params = {}) =>
+    new Promise((resolve, reject) => {
+      const id = nextId++;
+      const timer = setTimeout(() => reject(new Error(`RPC timeout for ${method}`)), 5000);
+      pending.set(id, (msg) => {
+        clearTimeout(timer);
+        resolve(msg);
+      });
+      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+    });
+
+  try {
+    const init = await rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {} });
+    assert.equal(init.result.serverInfo.name, 'incontrol-mcp');
+
+    const listed = await rpc('tools/list');
+    const names = listed.result.tools.map((t) => t.name);
+    assert.ok(names.includes('incontrol_list_context'));
+    assert.ok(names.includes('incontrol_get_context'));
+    assert.ok(names.includes('incontrol_save_handoff'));
+
+    // Save a handoff checkpoint containing a bearer token that must be redacted
+    const saved = await rpc('tools/call', {
+      name: 'incontrol_save_handoff',
+      arguments: {
+        project: 'InControl',
+        goal: 'Port auth architecture to Cursor',
+        summary: 'Implemented collector & Bearer supersecret-handoff-token123 check',
+        nextSteps: 'Verify MCP tool output in Cursor',
+      },
+    });
+    assert.match(saved.result.content[0].text, /Saved InControl handoff checkpoint/);
+
+    const listedCtx = await rpc('tools/call', {
+      name: 'incontrol_list_context',
+      arguments: { project: 'InControl' },
+    });
+    const listJson = JSON.parse(listedCtx.result.content[0].text);
+    assert.ok(listJson.handoffs.length >= 1);
+    assert.ok(listJson.workspaces.some((w) => w.projectName === 'InControl'));
+
+    const exported = await rpc('tools/call', {
+      name: 'incontrol_get_context',
+      arguments: { project: 'InControl' },
+    });
+    const md = exported.result.content[0].text;
+    assert.match(md, /# InControl Handoff Context/);
+    assert.match(md, /Port auth architecture to Cursor/);
+    assert.match(md, /Bearer \[REDACTED\]/);
+    assert.ok(!md.includes('supersecret-handoff-token123'));
+  } finally {
+    rl.close();
+    child.kill('SIGTERM');
+    await hub.close();
+    if (prevScan === undefined) delete process.env.INCONTROL_DISABLE_HOME_SCAN;
+    else process.env.INCONTROL_DISABLE_HOME_SCAN = prevScan;
+  }
+});

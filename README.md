@@ -64,10 +64,13 @@ Then open http://localhost:4747 or scan the 📱 QR code with your phone.
 ### Claude Code: approve Bash from your phone
 Add `--gate-bash` to the `PreToolUse` hook command. Each Bash call then waits for your Approve or Deny in InControl. Deny blocks the call and sends your reason back to Claude.
 
-### MCP tools for IDE agents
+### MCP tools for IDE agents (including cross-IDE context handoff)
 - `incontrol_status`: report the current task and step
 - `incontrol_ask_human`: wait for your decision or free-text answer
 - `incontrol_check_inbox`: pick up instructions you sent from the panel
+- `incontrol_list_context`: list today's live AI sessions (Antigravity, Codex, Claude Code), touched workspaces, handoffs, and archived Railway days
+- `incontrol_get_context`: pull a portable, secret-redacted Markdown handoff brief from another agent, workspace, or archived Railway day into the current IDE
+- `incontrol_save_handoff`: checkpoint this agent's goal, summary, and next steps so another IDE/agent can continue seamlessly
 
 Tip: add a rule to your IDE agent such as *"Call `incontrol_status` when you start or finish a task, and use `incontrol_ask_human` instead of stopping when you need a decision."*
 

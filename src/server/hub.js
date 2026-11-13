@@ -35,6 +35,8 @@ import {
   readLocalSnapshot,
   isValidDayString,
   formatLocalDay,
+  saveHandoffNote,
+  buildPortableContextBrief,
 } from './context-collector.js';
 import {
   getToolIconAsset,
@@ -431,6 +433,33 @@ export async function createInControlHub(options = {}) {
           return sendJson(res, 200, { ok: true, source: 'local', day, collection: local });
         }
         return sendJson(res, 404, { ok: false, error: `No snapshot found for ${day}` });
+      }
+
+      if (req.method === 'GET' && pathname === '/api/context/export') {
+        const result = await buildPortableContextBrief({
+          store,
+          settings: loadUserSettings(),
+          day: parsedUrl.searchParams.get('day') || '',
+          project: parsedUrl.searchParams.get('project') || '',
+          workspace: parsedUrl.searchParams.get('workspace') || '',
+          provider: parsedUrl.searchParams.get('provider') || '',
+          sessionId: parsedUrl.searchParams.get('sessionId') || '',
+          agentId: parsedUrl.searchParams.get('agentId') || '',
+        });
+        if (!result.ok) {
+          return sendJson(res, 404, result);
+        }
+        return sendJson(res, 200, result);
+      }
+
+      if (req.method === 'POST' && pathname === '/api/context/handoff') {
+        const body = await readJsonBody(req);
+        if (!body.summary && !body.goal) {
+          return sendJson(res, 400, { ok: false, error: 'summary or goal is required' });
+        }
+        const handoff = saveHandoffNote(body);
+        broadcast({ type: 'state_sync', state: buildFullState(store, network, qrSvg, homekit) });
+        return sendJson(res, 200, { ok: true, handoff });
       }
 
       // 10d. Apple Home / HomeView / Siri Voice Endpoints

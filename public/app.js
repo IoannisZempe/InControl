@@ -656,6 +656,7 @@ function renderFunctionBar(a) {
   const primaryHtml = primaryFns.map(renderChip).join('');
   const extraHtml = isExpanded
     ? `${extraFns.map(renderChip).join('')}
+       <button type="button" class="fn-chip fn-chip-add" data-act="copy-handoff" data-agent="${esc(a.id)}" title="Copy portable context handoff for another IDE or agent">Copy Handoff</button>
        <button type="button" class="fn-chip fn-chip-add" data-act="open-settings" title="Add or customize functions">+ Customize</button>`
     : '';
 
@@ -820,6 +821,42 @@ document.addEventListener('click', async (e) => {
     case 'open-settings':
       renderCustomFunctionsList();
       return $('#modal-settings').classList.remove('hidden');
+    case 'copy-handoff': {
+      const a = (state.agents || []).find((x) => x.id === agentId);
+      if (!a) return;
+      const q = new URLSearchParams();
+      if (a.workspace) q.set('workspace', a.workspace);
+      else if (a.projectName) q.set('project', a.projectName);
+      if (a.provider) q.set('provider', a.provider);
+      try {
+        const res = await fetch(`/api/context/export?${q.toString()}`);
+        const data = await res.json();
+        if (!res.ok || !data.ok || !data.markdown) {
+          return toast(data.error || 'Could not export handoff context');
+        }
+        await copy(data.markdown);
+        toast(`Copied ${a.projectName || 'agent'} handoff brief — paste into any IDE`);
+      } catch {
+        toast('Failed to export handoff context');
+      }
+      return;
+    }
+    case 'copy-day-brief': {
+      const day = el.dataset.day;
+      if (!day) return;
+      try {
+        const res = await fetch(`/api/context/export?day=${encodeURIComponent(day)}`);
+        const data = await res.json();
+        if (!res.ok || !data.ok || !data.markdown) {
+          return toast(data.error || `Could not export brief for ${day}`);
+        }
+        await copy(data.markdown);
+        toast(`Copied ${day} portable handoff brief`);
+      } catch {
+        toast(`Failed to copy ${day} brief`);
+      }
+      return;
+    }
     case 'run-function': {
       const fnId = el.dataset.fn;
       if (DEMO_MODE) {
@@ -1167,7 +1204,10 @@ async function refreshArchiveModal() {
         <button type="button" class="archive-row" data-act="preview-day" data-day="${esc(d.day)}">
           <div class="archive-row-top">
             <span class="archive-day">${esc(d.day)}</span>
-            <span class="archive-badges">${d.badges.map((b) => `<span class="url-badge">${esc(b)}</span>`).join('')}</span>
+            <span class="archive-badges">
+              ${d.badges.map((b) => `<span class="url-badge">${esc(b)}</span>`).join('')}
+              <span class="copy-btn" role="button" tabindex="0" data-act="copy-day-brief" data-day="${esc(d.day)}" title="Copy portable Markdown handoff">Copy Brief</span>
+            </span>
           </div>
           <div class="archive-summary">${esc(d.summary || `${d.projectCount || 0} projects · ${d.commitCount || 0} commits · ${d.eventCount || 0} events`)}</div>
         </button>`
@@ -1210,6 +1250,7 @@ $('#railway-config-form')?.addEventListener('submit', async (e) => {
   }
 });
 document.addEventListener('click', async (e) => {
+  if (e.target.closest('[data-act="copy-day-brief"]')) return;
   const dayBtn = e.target.closest('[data-act="preview-day"]');
   if (!dayBtn) return;
   const day = dayBtn.dataset.day;
