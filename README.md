@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/IoannisZempe/InControl/actions/workflows/ci.yml"><img src="https://github.com/IoannisZempe/InControl/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-FSL--1.1--MIT-blue.svg" alt="License: FSL-1.1-MIT" /></a>
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs welcome" /></a>
 </p>
 
@@ -135,4 +135,4 @@ New connectors, SDKs and fixes are very welcome. See [CONTRIBUTING.md](CONTRIBUT
 
 ## License
 
-[MIT](LICENSE)
+[FSL-1.1-MIT](LICENSE) — Free for everyone to use, inspect, and modify for personal or internal business use; commercial resale or competing products/services are restricted for 2 years before converting to MIT.

@@ -62,4 +62,4 @@ Every connector reports to the hub with the same payload (`POST /api/agents/even
 
 To ask the user a question, use `POST /api/agents/ask`. If you change the protocol, it must stay backward compatible.
 
-By contributing you agree that your contributions are licensed under the MIT License.
+By contributing you agree that your contributions are licensed under the [FSL-1.1-MIT License](LICENSE) (Functional Source License, Version 1.1, MIT Future License).
