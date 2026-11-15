@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Always-on Side Panel & Cross-Device Mission Control for AI Coding Agents (Claude Code, Antigravity, Cursor, Codex, Aider & Custom Agents)",
   "license": "FSL-1.1-MIT",
+  "author": "Ioannis Zempekakis <izempekakis@gmail.com> (https://x.com/ioanniszempe)",
   "homepage": "https://github.com/IoannisZempe/InControl#readme",
   "repository": {
     "type": "git",

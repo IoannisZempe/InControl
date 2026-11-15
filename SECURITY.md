@@ -17,6 +17,6 @@ InControl is a local-first control plane for your AI coding agents:
 
 ## Reporting a Vulnerability
 
-Please **do not open a public issue.** Report security vulnerabilities privately via [GitHub Security Advisories](https://github.com/IoannisZempe/InControl/security/advisories/new).
+Please **do not open a public issue.** Report security vulnerabilities privately via [GitHub Security Advisories](https://github.com/IoannisZempe/InControl/security/advisories/new) or by email at [izempekakis@gmail.com](mailto:izempekakis@gmail.com).
 
 We aim to acknowledge reports within 72 hours.

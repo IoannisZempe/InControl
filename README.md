@@ -8,6 +8,7 @@
   <a href="https://github.com/IoannisZempe/InControl/actions/workflows/ci.yml"><img src="https://github.com/IoannisZempe/InControl/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-FSL--1.1--MIT-blue.svg" alt="License: FSL-1.1-MIT" /></a>
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs welcome" /></a>
+  <a href="https://x.com/ioanniszempe"><img src="https://img.shields.io/badge/X-@ioanniszempe-black?logo=x" alt="X @ioanniszempe" /></a>
 </p>
 
 **One always-on side panel for all your AI agents.** See which agents need your input, which need your attention, and which are fine. Works across IDEs and terminals, and shows up on your Mac, phone, and any browser.
@@ -133,6 +134,11 @@ Or call the HTTP API directly:
 
 New connectors, SDKs and fixes are very welcome. See [CONTRIBUTING.md](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md), and the [Security Policy](SECURITY.md).
 
-## License
+## License & Contact
 
-[FSL-1.1-MIT](LICENSE) — Free for everyone to use, inspect, and modify for personal or internal business use; commercial resale or competing products/services are restricted for 2 years before converting to MIT.
+[FSL-1.1-MIT](LICENSE) — Copyright © 2026 **Ioannis Zempekakis**. Free for everyone to use, inspect, and modify for personal or internal business use; commercial resale or competing products/services are restricted for 2 years before converting to MIT.
+
+Questions, feedback, or commercial licensing inquiries:
+- **X:** [@ioanniszempe](https://x.com/ioanniszempe)
+- **Email:** [izempekakis@gmail.com](mailto:izempekakis@gmail.com)
+- **GitHub:** [@IoannisZempe](https://github.com/IoannisZempe)
