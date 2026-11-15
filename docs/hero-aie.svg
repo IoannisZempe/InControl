@@ -1,0 +1,259 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 540" width="1200" height="540" role="img" aria-label="InControl — All your AI agents in one terminal mission control">
+  <defs>
+    <style>
+      .bg-dark { fill: #070709; }
+      .panel { fill: #0c0c0f; stroke: #242429; stroke-width: 1; }
+      .panel-soft { fill: #111115; stroke: #27272d; stroke-width: 1; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+      .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      .gold { fill: #e8c468; }
+      .white { fill: #f5f5f7; }
+      .muted { fill: #8b8b96; }
+      .dim { fill: #4d4d57; }
+      .cursor-blink { animation: blink 1.15s steps(2, start) infinite; }
+      .pulse-red { animation: pulseGlow 2.4s ease-in-out infinite; }
+      .pulse-green { animation: pulseGreen 2.8s ease-in-out infinite; }
+      .scanline { animation: scan 5s linear infinite; }
+      @keyframes blink {
+        0%, 49% { opacity: 1; }
+        50%, 100% { opacity: 0; }
+      }
+      @keyframes pulseGlow {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.45; }
+      }
+      @keyframes pulseGreen {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.55; }
+      }
+      @keyframes scan {
+        0% { transform: translateY(0px); opacity: 0; }
+        15% { opacity: 0.35; }
+        85% { opacity: 0.35; }
+        100% { transform: translateY(230px); opacity: 0; }
+      }
+    </style>
+
+    <!-- Subtle diagonal hatch & dot pattern -->
+    <pattern id="gridDots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="0.85" fill="#1e1e24" />
+    </pattern>
+    <pattern id="diagHatch" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="12" stroke="#16161b" stroke-width="1" />
+    </pattern>
+
+    <!-- Glow for IN/CONTROL box -->
+    <filter id="boxGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="goldGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3.5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <linearGradient id="ctaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f5e1a4" />
+      <stop offset="100%" stop-color="#e8c468" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer Canvas -->
+  <rect width="1200" height="540" rx="14" class="bg-dark" />
+  <rect width="1200" height="540" rx="14" fill="url(#gridDots)" opacity="0.9" />
+  <rect x="0" y="0" width="1200" height="540" rx="14" fill="none" stroke="#222228" stroke-width="1.5" />
+
+  <!-- Top-right LIVE pill matching AIE/Code aesthetic -->
+  <g transform="translate(1044, 16)">
+    <rect width="136" height="24" rx="4" fill="#111115" stroke="#2a2a32" />
+    <circle cx="15" cy="12" r="3" fill="#22c55e" class="pulse-green" />
+    <text x="26" y="16" class="mono muted" font-size="10.5" letter-spacing="0.8">HUB :4747 LIVE</text>
+  </g>
+
+  <!-- LEFT RAIL: IN/CONTROL Brand + Spec Sidebar -->
+  <g transform="translate(20, 20)">
+    <rect width="236" height="500" rx="8" class="panel" />
+    <!-- Top-right grip dots (::) -->
+    <g fill="#4d4d57">
+      <circle cx="220" cy="14" r="1.3" /><circle cx="225" cy="14" r="1.3" />
+      <circle cx="220" cy="19" r="1.3" /><circle cx="225" cy="19" r="1.3" />
+    </g>
+
+    <!-- Glowing IN/CONTROL wordmark box -->
+    <g transform="translate(18, 22)">
+      <rect width="200" height="56" rx="4" fill="#09090b" stroke="#f5f5f7" stroke-width="2" filter="url(#boxGlow)" opacity="0.45" />
+      <rect width="200" height="56" rx="4" fill="#0b0b0e" stroke="#e4e4e7" stroke-width="1.6" />
+      <text x="100" y="36" text-anchor="middle" class="sans" font-size="22" font-weight="800" letter-spacing="1.4">
+        <tspan fill="#ffffff">IN</tspan><tspan fill="#555562">/</tspan><tspan fill="#e8c468">CONTROL</tspan>
+      </text>
+    </g>
+
+    <!-- Spec metadata lines -->
+    <g transform="translate(18, 98)" class="mono" font-size="10" letter-spacing="0.4">
+      <text x="0" y="0" class="gold">//RUNTIME</text>
+      <text x="78" y="0" class="white">LOCAL-FIRST HUB</text>
+      <text x="0" y="18" class="gold">//SURFACES</text>
+      <text x="78" y="18" class="white">MAC · PHONE · MCP</text>
+      <line x1="0" y1="30" x2="200" y2="30" stroke="#1e1e24" stroke-dasharray="2 3" />
+    </g>
+
+    <!-- Rail Item 1 (Active) -->
+    <g transform="translate(14, 142)">
+      <rect width="208" height="58" rx="6" fill="#17171c" stroke="#363640" />
+      <rect x="0" y="10" width="3" height="38" rx="1.5" fill="#e8c468" />
+      <text x="16" y="24" class="mono white" font-size="11.5" font-weight="700" letter-spacing="0.6">01 · TRIAGE FEED</text>
+      <text x="16" y="42" class="sans muted" font-size="11">Input → Review → Working</text>
+    </g>
+
+    <!-- Rail Item 2 -->
+    <g transform="translate(14, 210)">
+      <rect width="208" height="58" rx="6" fill="#0e0e12" stroke="#1f1f26" />
+      <circle cx="20" cy="29" r="3" fill="#e8c468" />
+      <text x="32" y="24" class="mono gold" font-size="11.5" font-weight="700" letter-spacing="0.6">02 · HOOKS &amp; MCP</text>
+      <text x="32" y="42" class="sans muted" font-size="11">Claude · Codex · Antigravity</text>
+    </g>
+
+    <!-- Rail Item 3 -->
+    <g transform="translate(14, 278)">
+      <rect width="208" height="58" rx="6" fill="#0e0e12" stroke="#1f1f26" />
+      <text x="16" y="24" class="mono white" font-size="11.5" font-weight="700" letter-spacing="0.6">03 · PHONE &amp; WHATSAPP</text>
+      <text x="16" y="42" class="sans muted" font-size="11">QR pairing &amp; auto-escalation</text>
+    </g>
+
+    <!-- Rail Item 4 -->
+    <g transform="translate(14, 346)">
+      <rect width="208" height="58" rx="6" fill="#0e0e12" stroke="#1f1f26" />
+      <text x="16" y="24" class="mono white" font-size="11.5" font-weight="700" letter-spacing="0.6">04 · DAILY ARCHIVE</text>
+      <text x="16" y="42" class="sans muted" font-size="11">Auto-sync → Railway Postgres</text>
+    </g>
+
+    <!-- Bottom license & creator chip -->
+    <g transform="translate(18, 428)">
+      <line x1="0" y1="0" x2="200" y2="0" stroke="#1e1e24" />
+      <text x="0" y="22" class="mono muted" font-size="10">LICENSE · FSL-1.1-MIT</text>
+      <text x="0" y="40" class="mono dim" font-size="10">MACOS NATIVE + PWA + CLI</text>
+      <text x="0" y="56" class="mono gold" font-size="10">BY IOANNIS ZEMPEKAKIS</text>
+    </g>
+  </g>
+
+  <!-- TOP MAIN HERO BENTO -->
+  <g transform="translate(274, 48)">
+    <rect width="906" height="290" rx="8" class="panel" />
+    <!-- Diagonal texture band right -->
+    <rect x="520" y="0" width="386" height="290" rx="8" fill="url(#diagHatch)" opacity="0.55" />
+    <!-- Corner grip dots -->
+    <g fill="#4d4d57">
+      <circle cx="888" cy="14" r="1.3" /><circle cx="893" cy="14" r="1.3" />
+      <circle cx="888" cy="19" r="1.3" /><circle cx="893" cy="19" r="1.3" />
+    </g>
+
+    <!-- Eyebrow -->
+    <text x="28" y="36" class="mono gold" font-size="11.5" font-weight="700" letter-spacing="1.2">
+      LOCAL-FIRST MISSION CONTROL // MACOS + PHONE + MCP
+    </text>
+
+    <!-- Big Headline -->
+    <text x="28" y="78" class="mono white" font-size="30" font-weight="800" letter-spacing="-0.4">ALL YOUR AI AGENTS.</text>
+    <text x="28" y="114" class="mono white" font-size="30" font-weight="800" letter-spacing="-0.4">ONE CONTROL ROOM.</text>
+
+    <!-- Subtitle -->
+    <text x="28" y="148" class="sans muted" font-size="13.5">One always-on side panel &amp; mobile hub across Claude Code, Codex,</text>
+    <text x="28" y="168" class="sans muted" font-size="13.5">Antigravity, ChatGPT App, and Cursor — built so you never miss a prompt.</text>
+
+    <!-- Gold Telemetry Metric Line -->
+    <text x="28" y="200" class="mono gold" font-size="11.5" font-weight="700">
+      0 cloud lock-in · 192-bit QR auth · auto Railway sync
+    </text>
+
+    <!-- Action Spec Pills -->
+    <g transform="translate(28, 222)">
+      <rect width="232" height="36" rx="4" fill="#f5f5f7" />
+      <text x="116" y="22.5" text-anchor="middle" class="mono" fill="#070709" font-size="11" font-weight="800" letter-spacing="0.4">
+        NPX INCONTROL-AGENTS START
+      </text>
+
+      <rect x="244" y="0" width="150" height="36" rx="4" fill="#0c0c0f" stroke="#3c3c46" />
+      <text x="319" y="22.5" text-anchor="middle" class="mono white" font-size="11" font-weight="700" letter-spacing="0.4">
+        NPM RUN PANEL
+      </text>
+    </g>
+
+    <!-- RIGHT TERMINAL BOX (exact AIE/Code prompt aesthetic!) -->
+    <g transform="translate(534, 28)">
+      <rect width="346" height="234" rx="6" fill="#060608" stroke="#24242a" />
+      <!-- Faint background telemetry binary matrix -->
+      <g class="mono" font-size="9.5" fill="#1e2028">
+        <text x="22" y="34">0010 1011 0100 1101</text>
+        <text x="200" y="54">1101 0010 1010</text>
+        <text x="36" y="196">1 110 1011 10 00 1011</text>
+        <text x="198" y="216">0101 1100 0011</text>
+      </g>
+
+      <!-- Subtle animated scanline -->
+      <rect x="1" y="0" width="344" height="2" fill="#e8c468" opacity="0.2" class="scanline" />
+
+      <!-- Glowing prompt line -->
+      <rect x="24" y="102" width="298" height="32" rx="4" fill="#0d0d12" stroke="#2c2c35" />
+      <polygon points="36,113 43,118 36,123" fill="#e8c468" />
+      <text x="52" y="122" class="mono white" font-size="13" font-weight="700" filter="url(#goldGlow)" opacity="0.4">INCONTROL START --PANEL</text>
+      <text x="52" y="122" class="mono white" font-size="13" font-weight="700">INCONTROL START --PANEL</text>
+      <rect x="238" y="122" width="10" height="2.5" class="gold cursor-blink" />
+
+      <!-- Mini status readouts inside terminal -->
+      <text x="26" y="160" class="mono muted" font-size="10.5">✓ watching antigravity, codex, chatgpt.app</text>
+      <text x="26" y="177" class="mono gold" font-size="10.5">✓ railway sync &amp; cross-ide mcp ready</text>
+    </g>
+  </g>
+
+  <!-- BOTTOM BENTO: LIVE AGENT TRIAGE STRIP -->
+  <g transform="translate(274, 354)">
+    <rect width="906" height="166" rx="8" class="panel" />
+    <g fill="#4d4d57">
+      <circle cx="888" cy="14" r="1.3" /><circle cx="893" cy="14" r="1.3" />
+      <circle cx="888" cy="19" r="1.3" /><circle cx="893" cy="19" r="1.3" />
+    </g>
+
+    <text x="24" y="28" class="mono gold" font-size="10.5" font-weight="700" letter-spacing="1">
+      LIVE ATTENTION PRIORITY // SORTED AUTOMATICALLY
+    </text>
+
+    <!-- Row 1: Needs Input -->
+    <g transform="translate(20, 42)">
+      <rect width="866" height="34" rx="5" fill="#170f11" stroke="#53242a" />
+      <circle cx="18" cy="17" r="4.5" fill="#ef4444" class="pulse-red" />
+      <text x="34" y="21" class="mono white" font-size="11.5" font-weight="700">NEEDS INPUT</text>
+      <text x="148" y="21" class="sans white" font-size="12">Claude Code · payments-api</text>
+      <text x="346" y="21" class="mono muted" font-size="11">"Allow npx prisma migrate dev?"</text>
+      <rect x="720" y="6" width="66" height="22" rx="4" fill="url(#ctaGrad)" />
+      <text x="753" y="20.5" text-anchor="middle" class="mono" fill="#070709" font-size="10.5" font-weight="800">APPROVE</text>
+      <rect x="794" y="6" width="56" height="22" rx="4" fill="#1e1215" stroke="#53242a" />
+      <text x="822" y="20.5" text-anchor="middle" class="mono" fill="#f87171" font-size="10.5" font-weight="700">DENY</text>
+    </g>
+
+    <!-- Row 2: Needs Review -->
+    <g transform="translate(20, 82)">
+      <rect width="866" height="34" rx="5" fill="#15130d" stroke="#4c3d1e" />
+      <circle cx="18" cy="17" r="4.5" fill="#eab308" />
+      <text x="34" y="21" class="mono gold" font-size="11.5" font-weight="700">NEEDS REVIEW</text>
+      <text x="148" y="21" class="sans white" font-size="12">Codex · cloud-infra</text>
+      <text x="346" y="21" class="mono muted" font-size="11">All 14 Terraform checks passed — ready</text>
+      <rect x="758" y="6" width="92" height="22" rx="4" fill="#1f1b11" stroke="#4c3d1e" />
+      <text x="804" y="20.5" text-anchor="middle" class="mono gold" font-size="10.5" font-weight="700">FOCUS IDE ↗</text>
+    </g>
+
+    <!-- Row 3: Working -->
+    <g transform="translate(20, 122)">
+      <rect width="866" height="34" rx="5" fill="#0d1511" stroke="#1f4632" />
+      <circle cx="18" cy="17" r="4.5" fill="#22c55e" class="pulse-green" />
+      <text x="34" y="21" class="mono" fill="#4ade80" font-size="11.5" font-weight="700">WORKING</text>
+      <text x="148" y="21" class="sans white" font-size="12">Antigravity · InControl</text>
+      <text x="346" y="21" class="mono muted" font-size="11">› auto-saving daily context &amp; syncing</text>
+      <text x="850" y="21" text-anchor="end" class="mono" fill="#4ade80" font-size="10.5">SYNCED · 17/17 TESTS</text>
+    </g>
+  </g>
+</svg>
