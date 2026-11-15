@@ -37,6 +37,7 @@ import {
   formatLocalDay,
   saveHandoffNote,
   buildPortableContextBrief,
+  startAutoContextSync,
 } from './context-collector.js';
 import {
   getToolIconAsset,
@@ -125,6 +126,10 @@ export async function createInControlHub(options = {}) {
 
   const store = new AgentStore();
   const stopAutoWatcher = options.autoWatch === false ? () => {} : startAutoWatcher(store);
+  const enableAutoContextSync = options.autoContextSync ?? (options.autoWatch !== false);
+  const stopAutoContextSync = enableAutoContextSync
+    ? startAutoContextSync(store, loadUserSettings, typeof options.autoContextSync === 'object' ? options.autoContextSync : {})
+    : () => {};
 
   const network = discoverNetworkUrls(port);
   network.pairingUrl = `${network.primaryProjectionUrl}/?token=${encodeURIComponent(token)}`;
@@ -671,6 +676,7 @@ export async function createInControlHub(options = {}) {
     token,
     close: async () => {
       stopAutoWatcher();
+      stopAutoContextSync();
       stopWhatsApp();
       await homekit.stop();
       wss.close();

@@ -189,7 +189,7 @@
         </button>
 
         <div class="bottom-bar-actions">
-          <button id="btn-save-day" class="bottom-pill" type="button" title="Capture today's full context & save to Railway">
+          <button id="btn-save-day" class="bottom-pill" type="button" title="Checkpoint & sync today's context to Railway now (also auto-saves every 15m)">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
             <span>Save Day</span>
           </button>
@@ -630,7 +630,7 @@ incontrol wrap --name "Aider" -- aider</pre>
         <button class="modal-close" data-close="modal-archive" aria-label="Close">✕</button>
       </div>
       <p class="modal-subtitle">
-        Capture today's InControl logs, active workspace Git commits, and local AI session summaries into a by-day Railway Postgres collection.
+        Auto-checkpoints today's context every 15 minutes and backfills unsaved past ledger days into your Railway Postgres archive. Use <strong>Save Today's Context</strong> for an instant manual checkpoint.
       </p>
 
       <div class="wa-actions" style="justify-content:space-between;margin-bottom:10px;">

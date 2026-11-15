@@ -749,3 +749,142 @@ test('mcp cross-ide handoff: save_handoff, list_context, and get_context port sa
     else process.env.INCONTROL_DISABLE_HOME_SCAN = prevScan;
   }
 });
+
+test('auto context sync: backfills unsaved ledger days, deduplicates uploads, and finalizes on rollover', async () => {
+  const http = await import('node:http');
+  const { AgentStore } = await import('../src/server/store.js');
+  const {
+    appendDailyEvent,
+    readLocalSnapshot,
+    syncDailyContextOnce,
+    formatLocalDay,
+  } = await import('../src/server/context-collector.js');
+
+  const prevHome = process.env.INCONTROL_HOME;
+  const prevScan = process.env.INCONTROL_DISABLE_HOME_SCAN;
+  const isolatedHome = fs.mkdtempSync(path.join(os.tmpdir(), 'incontrol-autosync-'));
+  process.env.INCONTROL_HOME = isolatedHome;
+  process.env.INCONTROL_DISABLE_HOME_SCAN = '1';
+
+  const pushedPayloads = [];
+  const storedDays = new Map();
+  const collectorServer = http.createServer((req, res) => {
+    if (req.headers.authorization !== 'Bearer auto-sync-tok') {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }));
+    }
+    if (req.method === 'POST' && req.url === '/api/days') {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => {
+        const parsed = JSON.parse(body);
+        pushedPayloads.push(parsed.day);
+        storedDays.set(parsed.day, parsed);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, day: parsed.day, updatedAt: new Date().toISOString() }));
+      });
+      return;
+    }
+    if (req.method === 'GET' && req.url.startsWith('/api/days')) {
+      const days = Array.from(storedDays.values()).map((d) => ({
+        day: d.day,
+        capturedAt: d.capturedAt,
+        summary: d.summary,
+      }));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true, days }));
+    }
+    res.writeHead(404);
+    res.end();
+  });
+
+  await new Promise((r) => collectorServer.listen(0, '127.0.0.1', r));
+  const collectorPort = collectorServer.address().port;
+  const getSettings = () => ({
+    railwayUrl: `http://127.0.0.1:${collectorPort}`,
+    railwayToken: 'auto-sync-tok',
+  });
+
+  try {
+    const day1 = new Date('2026-11-10T12:00:00');
+    const day1Str = formatLocalDay(day1);
+    const day2 = new Date('2026-11-11T12:00:00');
+    const day2Str = formatLocalDay(day2);
+    const prevDay = '2026-11-09';
+
+    // Simulate an unsaved prior day ledger on disk before Hub starts
+    appendDailyEvent({
+      timestamp: new Date('2026-11-09T14:00:00').getTime(),
+      type: 'status',
+      agentId: 'codex-prev',
+      agentName: 'Codex',
+      provider: 'codex',
+      projectName: 'OldProj',
+      message: 'Yesterday logged work without clicking Save Day',
+    });
+
+    const store = new AgentStore();
+    store.upsertAgent({
+      id: 'live-day1',
+      name: 'Claude Code',
+      provider: 'claude-code',
+      projectName: 'DayOneProj',
+      status: 'working',
+      currentTask: 'Implementing auto-sync',
+    });
+
+    const state = {
+      activeDay: day1Str,
+      lastSyncedFingerprints: new Map(),
+      inFlight: false,
+    };
+
+    // Pass 1: Backfills 2026-11-09 (without leaking today's live agent!) & captures/pushes day1
+    const first = await syncDailyContextOnce(store, getSettings, {
+      state,
+      now: () => day1,
+    });
+    assert.equal(first.ok, true);
+    assert.equal(first.today, day1Str);
+    assert.equal(first.todaySynced, true);
+    assert.ok(first.backfilledDays.includes(prevDay));
+
+    const prevSnap = readLocalSnapshot(prevDay);
+    assert.ok(prevSnap);
+    assert.equal(prevSnap.events.length, 1);
+    assert.equal(prevSnap.agents.length, 0, 'Backfilled past day should not contain later live agents');
+    assert.ok(storedDays.has(prevDay));
+    assert.ok(storedDays.has(day1Str));
+
+    // Pass 2 (same day, unchanged state): should skip redundant Railway upload
+    const pushCountAfterFirst = pushedPayloads.length;
+    const second = await syncDailyContextOnce(store, getSettings, {
+      state,
+      now: () => day1,
+    });
+    assert.equal(second.todaySynced, false);
+    assert.equal(pushedPayloads.length, pushCountAfterFirst);
+
+    // Pass 3 (calendar rolls over to day2): finalizes day1 cleanly on rollover
+    store.upsertAgent({
+      id: 'live-day1',
+      name: 'Claude Code',
+      status: 'idle',
+      currentTask: 'Finished before midnight',
+    });
+    const third = await syncDailyContextOnce(store, getSettings, {
+      state,
+      now: () => day2,
+    });
+    assert.equal(third.today, day2Str);
+    assert.ok(third.backfilledDays.includes(day1Str));
+    assert.equal(storedDays.get(day1Str)?.agents?.[0]?.currentTask, 'Finished before midnight');
+  } finally {
+    await new Promise((r) => collectorServer.close(r));
+    fs.rmSync(isolatedHome, { recursive: true, force: true });
+    if (prevHome === undefined) delete process.env.INCONTROL_HOME;
+    else process.env.INCONTROL_HOME = prevHome;
+    if (prevScan === undefined) delete process.env.INCONTROL_DISABLE_HOME_SCAN;
+    else process.env.INCONTROL_DISABLE_HOME_SCAN = prevScan;
+  }
+});

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -579,13 +580,15 @@ export function collectLocalAiSessionsToday(day = formatLocalDay(), roots = {}) 
  * Gather a complete structured daily context bundle from InControl store + history + Git + AI sessions.
  */
 export async function captureDailyContext(store, options = {}) {
-  const day = isValidDayString(options.day) ? options.day : formatLocalDay();
+  const today = formatLocalDay();
+  const day = isValidDayString(options.day) ? options.day : today;
   const capturedAt = new Date().toISOString();
   const events = readDailyEvents(day, 1000).map((ev) => ({
     ...ev,
     message: redactSecrets(ev.message),
   }));
-  const liveAgents = store ? store.getSortedAgents() : [];
+  const includeLiveAgents = Boolean(store) && (day === today || Boolean(options.includeLiveAgentsOnPastDay));
+  const liveAgents = includeLiveAgents ? store.getSortedAgents() : [];
 
   const sanitizedAgents = liveAgents.map((a) => ({
     id: a.id,
@@ -695,6 +698,16 @@ export async function captureDailyContext(store, options = {}) {
     aiSessions,
     handoffs,
   };
+
+  const hasActivity =
+    events.length > 0 ||
+    sanitizedAgents.length > 0 ||
+    aiSessions.length > 0 ||
+    workspaces.length > 0 ||
+    handoffs.length > 0;
+  if (options.skipIfEmpty && !hasActivity) {
+    return null;
+  }
 
   try {
     fs.mkdirSync(getHistoryDir(), { recursive: true, mode: 0o700 });
@@ -973,5 +986,162 @@ export async function buildPortableContextBrief({
     summary: collection.summary,
     markdown: lines.join('\n').trim(),
     brief,
+  };
+}
+
+/**
+ * Compute a deterministic hash of a snapshot's meaningful content (excluding capturedAt)
+ * so background sync only uploads when state actually changed.
+ */
+export function computeSnapshotFingerprint(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return '';
+  const body = {
+    day: snapshot.day,
+    projects: snapshot.projects || [],
+    agents: snapshot.agents || [],
+    events: snapshot.events || [],
+    workspaces: snapshot.workspaces || [],
+    aiSessions: snapshot.aiSessions || [],
+    handoffs: snapshot.handoffs || [],
+  };
+  return crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
+}
+
+async function pushIfChanged(snapshot, settings, state, remoteDaySet) {
+  if (!snapshot || !settings?.railwayUrl || !settings?.railwayToken) return false;
+  const fingerprint = computeSnapshotFingerprint(snapshot);
+  const alreadySyncedSame =
+    state.lastSyncedFingerprints.get(snapshot.day) === fingerprint &&
+    (!remoteDaySet || remoteDaySet.has(snapshot.day));
+  if (alreadySyncedSame) return false;
+
+  const pushed = await pushSnapshotToRailway(snapshot, settings);
+  if (pushed?.synced) {
+    state.lastSyncedFingerprints.set(snapshot.day, fingerprint);
+    remoteDaySet?.add(snapshot.day);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Run one incremental auto-save + Railway sync pass:
+ * 1. Finalize the previous active day immediately on midnight rollover.
+ * 2. Backfill any past local-ledger days that haven't been snapshotted or uploaded yet.
+ * 3. Checkpoint today's snapshot locally & push to Railway when content changed.
+ */
+export async function syncDailyContextOnce(store, getSettings, options = {}) {
+  const state = options.state || {
+    activeDay: null,
+    lastSyncedFingerprints: new Map(),
+    inFlight: false,
+  };
+  if (state.inFlight) return { ok: true, skipped: 'in_flight', todaySynced: false, backfilledDays: [] };
+
+  state.inFlight = true;
+  const backfilledDays = [];
+  let todaySynced = false;
+
+  try {
+    const nowValue = typeof options.now === 'function' ? options.now() : options.now;
+    const today = formatLocalDay(nowValue || new Date());
+    const settings = typeof getSettings === 'function' ? getSettings() : getSettings || {};
+    const railwayReady = Boolean(settings?.railwayUrl && settings?.railwayToken);
+
+    let remoteDaySet = null;
+    if (railwayReady) {
+      const remote = await fetchRailwayDays(settings, 30);
+      if (remote.ok) {
+        remoteDaySet = new Set((remote.days || []).map((d) => d.day));
+      }
+    }
+
+    // 1. Capture ending day right when calendar day rolls over
+    if (state.activeDay && state.activeDay !== today) {
+      const endedSnap = await captureDailyContext(store, {
+        day: state.activeDay,
+        includeLiveAgentsOnPastDay: true,
+        skipIfEmpty: true,
+        roots: options.roots,
+        extraWorkspaces: options.extraWorkspaces,
+      });
+      if (endedSnap) {
+        await pushIfChanged(endedSnap, settings, state, remoteDaySet);
+        backfilledDays.push(state.activeDay);
+      }
+    }
+    state.activeDay = today;
+
+    // 2. Backfill any missed local days (unsnapshotted JSONL ledgers or snapshots missing remotely)
+    const localDays = listLocalDays(30);
+    for (const entry of localDays) {
+      if (!entry?.day || entry.day === today) continue;
+      let snap = null;
+      if (entry.source === 'local-ledger') {
+        snap = await captureDailyContext(null, {
+          day: entry.day,
+          skipIfEmpty: true,
+          roots: options.roots,
+          extraWorkspaces: options.extraWorkspaces,
+        });
+      } else if (railwayReady && remoteDaySet && !remoteDaySet.has(entry.day)) {
+        snap = readLocalSnapshot(entry.day);
+      }
+      if (snap) {
+        const pushed = await pushIfChanged(snap, settings, state, remoteDaySet);
+        if (entry.source === 'local-ledger' || pushed) {
+          backfilledDays.push(entry.day);
+        }
+      }
+    }
+
+    // 3. Checkpoint today's snapshot if anything is active
+    const todaySnap = await captureDailyContext(store, {
+      day: today,
+      includeLiveAgentsOnPastDay: Boolean(nowValue),
+      skipIfEmpty: true,
+      roots: options.roots,
+      extraWorkspaces: options.extraWorkspaces,
+    });
+    if (todaySnap) {
+      todaySynced = await pushIfChanged(todaySnap, settings, state, remoteDaySet);
+    }
+
+    return { ok: true, today, todaySynced, backfilledDays };
+  } catch (err) {
+    return { ok: false, error: err?.message || 'Context auto-sync error', todaySynced, backfilledDays };
+  } finally {
+    state.inFlight = false;
+  }
+}
+
+/**
+ * Periodically auto-capture daily context locally and sync changes to Railway PostgreSQL.
+ */
+export function startAutoContextSync(store, getSettings, options = {}) {
+  const intervalMs = Math.max(1000, Number(options.intervalMs ?? 15 * 60 * 1000));
+  const initialDelayMs = Math.max(0, Number(options.initialDelayMs ?? 15_000));
+  const state = {
+    activeDay: formatLocalDay(),
+    lastSyncedFingerprints: new Map(),
+    inFlight: false,
+  };
+  let stopped = false;
+
+  const run = () => {
+    if (stopped) return Promise.resolve();
+    return syncDailyContextOnce(store, getSettings, { ...options, state }).catch(() => {});
+  };
+
+  const initialTimer = setTimeout(run, initialDelayMs);
+  initialTimer.unref?.();
+
+  const periodicTimer = setInterval(run, intervalMs);
+  periodicTimer.unref?.();
+
+  return () => {
+    stopped = true;
+    clearTimeout(initialTimer);
+    clearInterval(periodicTimer);
   };
 }
