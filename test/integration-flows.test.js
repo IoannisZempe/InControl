@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import readline from 'node:readline';
 import vm from 'node:vm';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -579,4 +580,110 @@ test('flow: Panel client (public/app.js) protects clicks/typing during WS update
   await sandbox.respond('agy-1', 'reply', 'Focus on auth');
   assert.equal(fetchCalls[1].url, '/api/agents/agy-1/respond');
   assert.equal(toasts[1], 'Queued for next Antigravity turn.');
+});
+
+test('flow: MCP incontrol_ask_human correlates with active agy card and panel reply wakes it live without IDE focus', async () => {
+  const hub = await createInControlHub({
+    port: 4823,
+    macNotifications: false,
+    token: 'flow-mcp-tok',
+    autoWatch: false,
+  });
+  const base = 'http://127.0.0.1:4823';
+
+  // Register an Antigravity card (as hooks/auto-watcher do)
+  await fetch(`${base}/api/agents/event`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: 'agy-live9999',
+      name: 'Antigravity',
+      provider: 'antigravity',
+      ide: 'Antigravity',
+      workspace: ROOT,
+      status: 'working',
+      currentTask: 'Deploy check',
+      currentStep: 'Waiting before push',
+    }),
+  });
+
+  // Launch MCP server using a generic cwd (as GUI plugin hosts often do)
+  const mcpChild = spawn(process.execPath, [BIN_PATH, 'mcp'], {
+    cwd: os.homedir(),
+    env: {
+      ...process.env,
+      INCONTROL_URL: base,
+      INCONTROL_DISABLE_HOME_SCAN: '1',
+    },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+
+  const rl = readline.createInterface({ input: mcpChild.stdout });
+  const pendingRpc = new Map();
+  rl.on('line', (line) => {
+    try {
+      const msg = JSON.parse(line);
+      if (msg.id !== undefined && pendingRpc.has(msg.id)) {
+        pendingRpc.get(msg.id)(msg);
+        pendingRpc.delete(msg.id);
+      }
+    } catch {}
+  });
+
+  let rpcId = 1;
+  const callRpc = (method, params = {}) =>
+    new Promise((resolve, reject) => {
+      const id = rpcId++;
+      const timer = setTimeout(() => reject(new Error(`RPC timeout: ${method}`)), 5000);
+      pendingRpc.set(id, (msg) => {
+        clearTimeout(timer);
+        resolve(msg);
+      });
+      mcpChild.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+    });
+
+  try {
+    await callRpc('initialize', { protocolVersion: '2024-11-05', capabilities: {} });
+    // Should NOT spawn a duplicate "Connected via MCP" idle card
+    const stateAfterInit = await (await fetch(`${base}/api/state`)).json();
+    assert.equal(stateAfterInit.agents.length, 1, 'Antigravity MCP init from home/generic cwd must not duplicate card');
+
+    // Call incontrol_ask_human -> blocks until user replies in panel on agy-live9999
+    const askRpcPromise = callRpc('tools/call', {
+      name: 'incontrol_ask_human',
+      arguments: {
+        question: 'Ready to push 3e91f4e to origin/main?',
+        options: ['Commit & Push', 'Wait'],
+      },
+    });
+
+    let waiting = null;
+    for (let i = 0; i < 30; i += 1) {
+      const st = await (await fetch(`${base}/api/state`)).json();
+      waiting = st.agents.find((a) => a.id === 'agy-live9999' && a.status === 'needs_input');
+      if (waiting) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    assert.ok(waiting, 'incontrol_ask_human must promote existing agy-live9999 card into needs_input');
+    assert.match(waiting.pendingPrompt.question, /Ready to push/);
+
+    const respondRes = await (
+      await fetch(`${base}/api/agents/agy-live9999/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reply', text: 'Push to main now', sourceDevice: 'Mac Panel' }),
+      })
+    ).json();
+    assert.equal(respondRes.deliveredLive, true, 'Live MCP waiter reply must report deliveredLive:true');
+    assert.equal(respondRes.requiresWake, false);
+    assert.equal(respondRes.agent.status, 'working');
+    assert.equal(respondRes.agent.queuedMessages.length, 0, 'Consumed waiter reply must not remain duplicated in queue');
+
+    const askResult = await askRpcPromise;
+    assert.match(askResult.result.content[0].text, /reply="Push to main now"/);
+  } finally {
+    rl.close();
+    mcpChild.kill();
+    await hub.close();
+  }
 });

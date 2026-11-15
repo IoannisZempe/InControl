@@ -675,15 +675,23 @@ export function installIntegration(targetId) {
         },
       },
     };
-    fs.mkdirSync(AGY_PLUGIN_DIR, { recursive: true });
+    const pluginRulesDir = path.join(AGY_PLUGIN_DIR, 'rules');
+    const pluginRuleMd = `# InControl Two-Way Remote Steering
+
+When a user prompt or turn includes \`[From InControl\` (steered from the Mac Side Panel or mobile dashboard), OR when pausing for explicit user approval/confirmation in a session connected to InControl:
+- Prefer calling the \`incontrol_ask_human\` MCP tool (with \`question\`, \`options\`, and optional \`command\`) instead of ending the turn in plain prose alone, whenever you expect a follow-up click or command from the panel.
+- Holding on \`incontrol_ask_human\` keeps the session alive so clicking Approve/Commit/Send in the InControl panel executes immediately without switching back to the Antigravity IDE.
+`;
+    fs.mkdirSync(pluginRulesDir, { recursive: true });
     fs.writeFileSync(AGY_PLUGIN_MANIFEST, JSON.stringify(pluginManifest, null, 2));
     fs.writeFileSync(AGY_PLUGIN_HOOKS, JSON.stringify(agyHooks, null, 2));
     fs.writeFileSync(AGY_PLUGIN_MCP, JSON.stringify(pluginMcp, null, 2));
+    fs.writeFileSync(path.join(pluginRulesDir, 'AGENTS.md'), pluginRuleMd);
     upsertJsonMcpConfig(AGY_MCP_CONFIG, 'Antigravity');
     stripLegacyIncontrolHooks();
     return {
       ok: true,
-      message: 'Installed InControl Antigravity plugin (hooks + MCP) in ~/.gemini/config/plugins/incontrol/',
+      message: 'Installed InControl Antigravity plugin (hooks + MCP + rule) in ~/.gemini/config/plugins/incontrol/',
     };
   }
 
@@ -949,7 +957,7 @@ function resolveCodexBin() {
   return 'codex';
 }
 
-export function inspectAgentDelivery(store, agent) {
+export function inspectAgentDelivery(store, agent, respondResult = null) {
   if (!agent) {
     return { ready: false, mode: 'missing', warning: 'Agent not found.' };
   }
@@ -958,6 +966,10 @@ export function inspectAgentDelivery(store, agent) {
   }
   const tool = (agent.provider || agent.tool || agent.toolKey || '').toLowerCase();
   const isTurnEnded = agent.status === 'idle' || agent.status === 'needs_attention';
+
+  if (respondResult?.deliveredLive) {
+    return { ready: true, mode: tool === 'antigravity' ? 'plugin' : 'live' };
+  }
 
   if (tool === 'antigravity') {
     const hooksReady =
@@ -972,12 +984,20 @@ export function inspectAgentDelivery(store, agent) {
           'Queued, but Antigravity two-way hooks are not installed yet — click "+ Connect" -> Setup Antigravity so Security Check & Steer reach your session.',
       };
     }
+    if (respondResult?.requiresWake || isTurnEnded) {
+      return {
+        ready: false,
+        requiresWake: true,
+        mode: 'queued-needs-wake',
+        idleNote:
+          'Queued — this Antigravity turn has ended. Click Copy + Focus & paste/send in Antigravity (or have the agent ask via incontrol_ask_human).',
+        warning:
+          'Queued in InControl, but this Antigravity turn already ended — Antigravity plugins cannot wake an ended IDE turn from outside. Click Copy + Focus to submit it in Antigravity.',
+      };
+    }
     return {
       ready: true,
       mode: mcpReady ? 'plugin' : 'hook',
-      idleNote: isTurnEnded
-        ? 'Queued — this turn has ended, so it applies on the next Antigravity turn (click Focus if waiting at prompt).'
-        : undefined,
     };
   }
 

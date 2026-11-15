@@ -1,4 +1,5 @@
 import { hubHeaders } from './http.js';
+import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 
@@ -15,6 +16,43 @@ export function runMcpServer(args = []) {
   const agentName = getFlagValue(args, '--name') || process.env.INCONTROL_NAME || `${ide} Agent`;
   const workspace = process.cwd();
   const agentId = `${provider}-${path.basename(workspace)}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+  const isGenericCwd =
+    workspace === '/' ||
+    workspace === os.homedir() ||
+    path.basename(workspace) === 'workspace' ||
+    workspace.includes(`${path.sep}.gemini${path.sep}`);
+
+  async function resolveTargetAgent(explicitAgentId, explicitWorkspace) {
+    const targetWs = explicitWorkspace || workspace;
+    if (explicitAgentId) {
+      return { id: String(explicitAgentId), workspace: targetWs, name: agentName, ide };
+    }
+    try {
+      const res = await fetch(`${hubUrl}/api/state`, {
+        headers: hubHeaders(false),
+        signal: AbortSignal.timeout(700),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const agents = Array.isArray(data.agents) ? data.agents : [];
+        const normWs = targetWs.replace(/\/+$/, '');
+        const byWs = !isGenericCwd || explicitWorkspace
+          ? agents.find((a) => a.workspace && a.workspace.replace(/\/+$/, '') === normWs && a.provider === provider) ||
+            agents.find((a) => a.workspace && a.workspace.replace(/\/+$/, '') === normWs)
+          : null;
+        const matched = byWs || (provider === 'antigravity' ? agents.find((a) => a.id.startsWith('agy-')) : null);
+        if (matched) {
+          return {
+            id: matched.id,
+            workspace: matched.workspace || targetWs,
+            name: matched.name || agentName,
+            ide: matched.ide || ide,
+          };
+        }
+      }
+    } catch {}
+    return { id: agentId, workspace: targetWs, name: agentName, ide };
+  }
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -44,22 +82,25 @@ export function runMcpServer(args = []) {
 
     try {
       if (method === 'initialize') {
-        // Auto-register the IDE agent with the InControl Hub on MCP initialization
-        fetch(`${hubUrl}/api/agents/event`, {
-          method: 'POST',
-          headers: hubHeaders(),
-          body: JSON.stringify({
-            id: agentId,
-            name: agentName,
-            provider,
-            ide,
-            workspace,
-            drain: false,
-            status: 'idle',
-            currentTask: 'Connected via MCP',
-            currentStep: 'Standing by in IDE',
-          }),
-        }).catch(() => {});
+        // Avoid creating redundant "workspace / Standing by" cards for Antigravity when generic CWD is used;
+        // Antigravity sessions are already tracked live via hooks & watcher and matched on tool call.
+        if (!(provider === 'antigravity' && isGenericCwd)) {
+          fetch(`${hubUrl}/api/agents/event`, {
+            method: 'POST',
+            headers: hubHeaders(),
+            body: JSON.stringify({
+              id: agentId,
+              name: agentName,
+              provider,
+              ide,
+              workspace,
+              drain: false,
+              status: 'idle',
+              currentTask: 'Connected via MCP',
+              currentStep: 'Standing by in IDE',
+            }),
+          }).catch(() => {});
+        }
 
         return sendResponse(id, {
           protocolVersion: '2024-11-05',
@@ -228,15 +269,16 @@ export function runMcpServer(args = []) {
         const argsObj = params?.arguments || {};
 
         if (toolName === 'incontrol_status') {
+          const target = await resolveTargetAgent(argsObj.agentId, argsObj.workspace);
           const res = await fetch(`${hubUrl}/api/agents/event`, {
             method: 'POST',
             headers: hubHeaders(),
             body: JSON.stringify({
-              id: agentId,
-              name: agentName,
+              id: target.id,
+              name: target.name,
               provider,
-              ide,
-              workspace,
+              ide: target.ide,
+              workspace: target.workspace,
               status: argsObj.status || 'working',
               currentTask: argsObj.currentTask,
               currentStep: argsObj.currentStep,
@@ -261,6 +303,7 @@ export function runMcpServer(args = []) {
         }
 
         if (toolName === 'incontrol_ask_human') {
+          const target = await resolveTargetAgent(argsObj.agentId, argsObj.workspace);
           const formattedOptions = Array.isArray(argsObj.options) && argsObj.options.length > 0
             ? argsObj.options.map((label, idx) => ({
                 id: String(label).toLowerCase().replace(/[^a-z0-9]+/g, '_') || `opt_${idx}`,
@@ -276,11 +319,11 @@ export function runMcpServer(args = []) {
             method: 'POST',
             headers: hubHeaders(),
             body: JSON.stringify({
-              id: agentId,
-              name: agentName,
+              id: target.id,
+              name: target.name,
               provider,
-              ide,
-              workspace,
+              ide: target.ide,
+              workspace: target.workspace,
               wait: true,
               question: argsObj.question,
               command: argsObj.command || null,
@@ -302,7 +345,8 @@ export function runMcpServer(args = []) {
         }
 
         if (toolName === 'incontrol_check_inbox') {
-          const res = await fetch(`${hubUrl}/api/agents/${encodeURIComponent(agentId)}/messages`, { headers: hubHeaders(false) });
+          const target = await resolveTargetAgent(argsObj.agentId, argsObj.workspace);
+          const res = await fetch(`${hubUrl}/api/agents/${encodeURIComponent(target.id)}/messages`, { headers: hubHeaders(false) });
           const data = await res.json();
           return sendResponse(id, {
             content: [

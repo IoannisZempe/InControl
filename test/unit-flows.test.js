@@ -157,6 +157,7 @@ test('unit: Antigravity plugin installer & inspectAgentDelivery() in isolated HO
       'Hook command must quote absolute process.execPath for GUI PATH independence'
     );
     assert.equal(mcp.mcpServers.incontrol.command, process.execPath);
+    assert.ok(fs.existsSync(path.join(pluginDir, 'rules', 'AGENTS.md')), 'Plugin rule AGENTS.md must be installed');
 
     // Verify legacy incontrol hook entry was removed while third-party hook was preserved
     const legacyAfter = JSON.parse(fs.readFileSync(path.join(home, '.gemini', 'config', 'hooks.json'), 'utf8'));
@@ -172,8 +173,10 @@ test('unit: Antigravity plugin installer & inspectAgentDelivery() in isolated HO
     assert.equal(afterWorking.idleNote, undefined);
 
     const afterIdle = inspectAgentDelivery(store, idleAgy);
-    assert.equal(afterIdle.ready, true);
-    assert.match(afterIdle.idleNote, /next Antigravity turn/i);
+    assert.equal(afterIdle.ready, false);
+    assert.equal(afterIdle.requiresWake, true);
+    assert.equal(afterIdle.mode, 'queued-needs-wake');
+    assert.ok(afterIdle.warning.includes('Copy + Focus'));
 
     // Verify scanAntigravitySessions() promotes confirmation questions into needs_input
     // and keeps completed responses in needs_attention well past 45s (2 minutes old)
@@ -209,11 +212,14 @@ test('unit: Antigravity plugin installer & inspectAgentDelivery() in isolated HO
     assert.equal(promptAgent.pendingPrompt.options[0].label, 'Reply "commit and push to main"');
     assert.equal(promptAgent.pendingPrompt.options[0].replyText, 'commit and push to main');
 
-    // Clicking Reply or Dismiss must not immediately revert back to needs_input on next scan
-    store.respondToAgent('agy-convprom', { action: 'reply', text: 'commit and push to main', sourceDevice: 'Mac Panel' });
-    assert.equal(store.agents.get('agy-convprom').status, 'working');
+    // Replying on a passive stopped transcript prompt queues it honestly (needs_attention + requiresWake)
+    // instead of faking green working status, and must not revert back to needs_input on next scan
+    const replyRes = store.respondToAgent('agy-convprom', { action: 'reply', text: 'commit and push to main', sourceDevice: 'Mac Panel' });
+    assert.equal(replyRes.deliveredLive, false);
+    assert.equal(replyRes.requiresWake, true);
+    assert.equal(store.agents.get('agy-convprom').status, 'needs_attention');
     scanAntigravitySessions(store, seen, dismissed);
-    assert.equal(store.agents.get('agy-convprom').status, 'working', 'Fresh user reply must not be overwritten by stale transcript');
+    assert.equal(store.agents.get('agy-convprom').status, 'needs_attention', 'Fresh queued state must not be overwritten by stale transcript');
   `;
 
   try {

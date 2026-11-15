@@ -211,12 +211,12 @@ export async function executeCustomFunction(store, agentId, fnId) {
   }
 
   if (fn.type === 'prompt') {
-    const delivery = inspectAgentDelivery(store, agent);
     const res = store.respondToAgent(agentId, {
       action: 'reply',
       text: fn.payload,
       sourceDevice: `Function · ${fn.label}`,
     });
+    const delivery = inspectAgentDelivery(store, agent, res);
     const baseMsg = `Sent "${fn.label}" to ${agent.projectName}`;
     return {
       ok: res.ok,

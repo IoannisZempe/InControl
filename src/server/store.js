@@ -167,6 +167,7 @@ export class AgentStore extends EventEmitter {
     const text = responsePayload.text ?? '';
     const requestId = responsePayload.requestId || agent.pendingPrompt?.requestId || null;
     const sourceDevice = responsePayload.sourceDevice || 'Panel';
+    const previousStatus = agent.status;
 
     const answerSummary = text
       ? `${action === 'reply' ? '' : `[${action}] `}${text}`
@@ -176,31 +177,19 @@ export class AgentStore extends EventEmitter {
     agent.metrics.updatedAt = now;
     agent.pendingPrompt = null;
 
-    if (action === 'deny' || action === 'reject') {
-      agent.status = 'needs_attention';
-      agent.currentStep = 'Action denied by user';
-      agent.attentionReason = 'Tool/action rejected — awaiting next instruction';
-    } else if (action === 'dismiss' || action === 'acknowledge') {
-      agent.status = 'idle';
-      agent.currentStep = 'Acknowledged by user';
-      agent.attentionReason = null;
-    } else {
-      agent.status = 'working';
-      agent.currentStep = text ? `Received reply: "${text.slice(0, 50)}"` : `Approved (${action})`;
-      agent.attentionReason = null;
-    }
-
     this._appendLog(agent, {
       type: 'user_reply',
       message: `You (${sourceDevice}): ${answerSummary}`,
       timestamp: now,
     });
 
-    // 1. If a blocking HTTP/hook request is waiting, resolve it immediately
+    // 1. If a blocking HTTP/hook/MCP request is waiting, resolve it immediately
+    let resolvedWaiter = false;
     if (requestId && this.pendingWaiters.has(requestId)) {
       const waiter = this.pendingWaiters.get(requestId);
       clearTimeout(waiter.timer);
       this.pendingWaiters.delete(requestId);
+      resolvedWaiter = true;
       waiter.resolve({
         ok: true,
         requestId,
@@ -215,6 +204,7 @@ export class AgentStore extends EventEmitter {
         if (waiter.agentId === agentId) {
           clearTimeout(waiter.timer);
           this.pendingWaiters.delete(reqId);
+          resolvedWaiter = true;
           waiter.resolve({
             ok: true,
             requestId: reqId,
@@ -228,23 +218,57 @@ export class AgentStore extends EventEmitter {
       }
     }
 
-    // 2. If a live stdin handler is registered (e.g. CLI wrapper, Codex queue, or simulator), invoke it
+    // 2. If a live stdin/queue handler is registered (e.g. CLI wrapper, Codex queue, or simulator), invoke it
     const stdinHandler = this.stdinHandlers.get(agentId);
+    const hasLiveHandler = Boolean(stdinHandler);
     if (stdinHandler) {
       stdinHandler({ action, text, requestId, sourceDevice });
     }
-    // Always also queue for polling/hook/MCP agents
-    agent.queuedMessages.push({
-      id: `msg_${crypto.randomUUID().slice(0, 8)}`,
-      action,
-      text,
-      requestId,
-      sourceDevice,
-      timestamp: now,
-    });
+
+    const isDismissOrDeny =
+      action === 'deny' || action === 'reject' || action === 'dismiss' || action === 'acknowledge';
+    const wasAlreadyWorking = previousStatus === 'working';
+    const deliveredLive = resolvedWaiter || hasLiveHandler || wasAlreadyWorking;
+    const requiresWake = !isDismissOrDeny && !deliveredLive;
+
+    // Queue for hook/polling agents only if a blocking waiter did not already consume the answer
+    if (!resolvedWaiter) {
+      agent.queuedMessages.push({
+        id: `msg_${crypto.randomUUID().slice(0, 8)}`,
+        action,
+        text,
+        requestId,
+        sourceDevice,
+        timestamp: now,
+      });
+    }
+
+    if (action === 'deny' || action === 'reject') {
+      agent.status = 'needs_attention';
+      agent.currentStep = 'Action denied by user';
+      agent.attentionReason = 'Tool/action rejected — awaiting next instruction';
+    } else if (action === 'dismiss' || action === 'acknowledge') {
+      agent.status = 'idle';
+      agent.currentStep = 'Acknowledged by user';
+      agent.attentionReason = null;
+    } else if (deliveredLive) {
+      agent.status = 'working';
+      agent.currentStep = text ? `Received reply: "${text.slice(0, 50)}"` : `Approved (${action})`;
+      agent.attentionReason = null;
+    } else {
+      // Honest status: the session's turn already ended and no live waiter/stdin handler consumed
+      // this instruction yet. Do NOT pretend the agent is actively running (`working`).
+      agent.status = 'needs_attention';
+      agent.currentStep = text
+        ? `Queued for next turn (session stopped): "${text.slice(0, 40)}"`
+        : `Queued (${action}) — session stopped`;
+      agent.attentionReason = text
+        ? `Queued "${text.slice(0, 72)}" — turn already ended; click Copy + Focus in IDE to wake it.`
+        : `Queued (${action}) — turn already ended; focus IDE to wake next turn.`;
+    }
 
     this.emit('change', { type: 'agent_responded', agent: this.serializeAgent(agent) });
-    return { ok: true, agent: this.serializeAgent(agent) };
+    return { ok: true, deliveredLive, requiresWake, agent: this.serializeAgent(agent) };
   }
 
   /**

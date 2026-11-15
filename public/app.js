@@ -579,6 +579,19 @@ function renderCard(a) {
   const isCardExpanded = isActionable || expandedCards.has(a.id) || expandedCardAdvanced.has(a.id) || hasDraft;
   const fnBarHtml = isCardExpanded ? renderFunctionBar(a) : '';
 
+  const queuedList = Array.isArray(a.queuedMessages) ? a.queuedMessages : [];
+  const latestQueued = queuedList.length ? queuedList[queuedList.length - 1] : null;
+  const queuedBannerHtml = latestQueued
+    ? `<div class="attention-bar">
+         <span class="attention-text">Queued (${queuedList.length}): &ldquo;${esc(String(latestQueued.text || latestQueued.action || '').slice(0, 56))}&rdquo;</span>
+         ${
+           a.status !== 'working' && latestQueued.text
+             ? `<button type="button" class="mini-icon-btn" data-act="copy-focus" data-agent="${esc(a.id)}" data-copy-cmd="${esc(latestQueued.text)}" title="Copy queued command &amp; focus ${esc(a.ide)} window">Copy + Focus</button>`
+             : ''
+         }
+       </div>`
+    : '';
+
   let decisionHtml = '';
   if (a.status === 'needs_input' && p) {
     const opts = (p.options || [])
@@ -681,6 +694,7 @@ function renderCard(a) {
           : ''
       }
 
+      ${queuedBannerHtml}
       ${decisionHtml}
       ${fnBarHtml}
       ${logHtml}
@@ -844,6 +858,15 @@ document.addEventListener('click', async (e) => {
       return respond(agentId, el.dataset.action);
     case 'focus':
       return focusAgent(agentId);
+    case 'copy-focus': {
+      const cmd = el.dataset.copyCmd || '';
+      if (cmd && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(cmd).catch(() => {});
+      }
+      focusAgent(agentId);
+      toast('Copied command & focused IDE — paste and press Enter', 3200);
+      return;
+    }
     case 'toggle-log':
       expandedLogs.has(agentId) ? expandedLogs.delete(agentId) : expandedLogs.add(agentId);
       return renderAgents();

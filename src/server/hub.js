@@ -270,7 +270,7 @@ export async function createInControlHub(options = {}) {
         const body = await readJsonBody(req);
         const result = store.respondToAgent(agentId, body);
         const agent = store.agents.get(agentId);
-        const delivery = result.ok && agent ? inspectAgentDelivery(store, agent) : null;
+        const delivery = result.ok && agent ? inspectAgentDelivery(store, agent, result) : null;
         return sendJson(res, result.ok ? 200 : 404, delivery ? { ...result, delivery } : result);
       }
 
