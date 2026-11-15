@@ -187,7 +187,7 @@ async function reportEvent(hubUrl, payload) {
     await fetch(`${hubUrl}/api/agents/event`, {
       method: 'POST',
       headers: hubHeaders(),
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ drain: false, ...payload }),
     });
   } catch {}
 }

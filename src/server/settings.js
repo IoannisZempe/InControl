@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { validateRailwayUrl } from './context-collector.js';
+import { inspectAgentDelivery } from '../connectors/auto-watcher.js';
 
 function getConfigDir() {
   return process.env.INCONTROL_HOME || path.join(os.homedir(), '.incontrol');
@@ -210,15 +211,20 @@ export async function executeCustomFunction(store, agentId, fnId) {
   }
 
   if (fn.type === 'prompt') {
+    const delivery = inspectAgentDelivery(store, agent);
     const res = store.respondToAgent(agentId, {
       action: 'reply',
       text: fn.payload,
       sourceDevice: `Function · ${fn.label}`,
     });
+    const baseMsg = `Sent "${fn.label}" to ${agent.projectName}`;
     return {
       ok: res.ok,
       type: 'prompt',
-      message: `Sent "${fn.label}" to ${agent.projectName}`,
+      delivered: delivery.ready,
+      delivery,
+      warning: delivery.warning || null,
+      message: delivery.warning || delivery.idleNote || baseMsg,
     };
   }
 

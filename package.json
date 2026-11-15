@@ -34,7 +34,9 @@
     "panel": "node ./bin/incontrol.js panel",
     "build:macos": "swiftc macos/InControlPanel.swift -o macos/incontrol-panel -framework Cocoa -framework WebKit",
     "mcp": "node ./bin/incontrol.js mcp",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "test:unit": "node --test test/unit-flows.test.js",
+    "test:flows": "node --test test/integration-flows.test.js"
   },
   "keywords": [
     "ai-agents",

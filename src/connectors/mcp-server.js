@@ -54,6 +54,7 @@ export function runMcpServer(args = []) {
             provider,
             ide,
             workspace,
+            drain: false,
             status: 'idle',
             currentTask: 'Connected via MCP',
             currentStep: 'Standing by in IDE',

@@ -79,6 +79,7 @@ export async function runClaudeHook(args = []) {
         headers: hubHeaders(),
         body: JSON.stringify({
           ...baseAgent,
+          drain: false,
           status: 'working',
           currentStep: `${toolName}: ${cmdPreview}`,
           incrementTools: true,
@@ -108,6 +109,7 @@ export async function runClaudeHook(args = []) {
         headers: hubHeaders(),
         body: JSON.stringify({
           ...baseAgent,
+          drain: false,
           status: 'needs_attention',
           currentStep: 'Finished response — ready for your review',
           attentionReason: 'Claude Code completed its turn.',
@@ -122,6 +124,7 @@ export async function runClaudeHook(args = []) {
         headers: hubHeaders(),
         body: JSON.stringify({
           ...baseAgent,
+          drain: false,
           status: 'working',
           currentTask: promptText.slice(0, 120),
           currentStep: 'Thinking & planning...',
@@ -135,6 +138,7 @@ export async function runClaudeHook(args = []) {
         headers: hubHeaders(),
         body: JSON.stringify({
           ...baseAgent,
+          drain: false,
           status: 'working',
           currentStep: `Event: ${eventName}`,
         }),

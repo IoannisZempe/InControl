@@ -11,6 +11,7 @@ import {
   startAutoWatcher,
   getIntegrationsStatus,
   installIntegration,
+  inspectAgentDelivery,
 } from '../connectors/auto-watcher.js';
 import {
   setupWhatsAppEscalation,
@@ -221,7 +222,8 @@ export async function createInControlHub(options = {}) {
       if (req.method === 'POST' && pathname === '/api/agents/event') {
         const body = await readJsonBody(req);
         const agent = store.upsertAgent(body);
-        const queuedMessages = store.drainQueuedMessages(agent.id);
+        const shouldDrain = body.drain !== false;
+        const queuedMessages = shouldDrain ? store.drainQueuedMessages(agent.id) : [];
         return sendJson(res, 200, {
           ok: true,
           agent: store.serializeAgent(agent),
@@ -267,7 +269,9 @@ export async function createInControlHub(options = {}) {
         const agentId = decodeURIComponent(respondMatch[1]);
         const body = await readJsonBody(req);
         const result = store.respondToAgent(agentId, body);
-        return sendJson(res, result.ok ? 200 : 404, result);
+        const agent = store.agents.get(agentId);
+        const delivery = result.ok && agent ? inspectAgentDelivery(store, agent) : null;
+        return sendJson(res, result.ok ? 200 : 404, delivery ? { ...result, delivery } : result);
       }
 
       // 5. POST /api/agents/:id/focus — Focus IDE / Terminal window on macOS

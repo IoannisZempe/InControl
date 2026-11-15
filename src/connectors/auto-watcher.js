@@ -14,6 +14,10 @@ const AGY_BRAIN_DIR = path.join(HOME, '.gemini', 'antigravity', 'brain');
 const AGY_CONFIG_DIR = path.join(HOME, '.gemini', 'config');
 const AGY_HOOKS_CONFIG = path.join(AGY_CONFIG_DIR, 'hooks.json');
 const AGY_MCP_CONFIG = path.join(AGY_CONFIG_DIR, 'mcp_config.json');
+const AGY_PLUGIN_DIR = path.join(AGY_CONFIG_DIR, 'plugins', 'incontrol');
+const AGY_PLUGIN_MANIFEST = path.join(AGY_PLUGIN_DIR, 'plugin.json');
+const AGY_PLUGIN_HOOKS = path.join(AGY_PLUGIN_DIR, 'hooks.json');
+const AGY_PLUGIN_MCP = path.join(AGY_PLUGIN_DIR, 'mcp_config.json');
 const CODEX_DIR = path.join(HOME, '.codex');
 const CODEX_INDEX = path.join(CODEX_DIR, 'session_index.jsonl');
 const CODEX_SESSIONS_DIR = path.join(CODEX_DIR, 'sessions');
@@ -504,8 +508,10 @@ function scanCodexAndChatGptSessions(store, seenMtimes, dismissedPrompts = new S
  */
 export function getIntegrationsStatus() {
   const agyDetected = fs.existsSync(AGY_BRAIN_DIR);
-  const agyHooksInstalled = fileContains(AGY_HOOKS_CONFIG, 'incontrol');
-  const agyMcpInstalled = fileContains(AGY_MCP_CONFIG, 'incontrol');
+  const agyHooksInstalled =
+    fileContains(AGY_PLUGIN_HOOKS, 'incontrol') || fileContains(AGY_HOOKS_CONFIG, 'incontrol');
+  const agyMcpInstalled =
+    fileContains(AGY_PLUGIN_MCP, 'incontrol') || fileContains(AGY_MCP_CONFIG, 'incontrol');
   const agyFullyConfigured = agyHooksInstalled && agyMcpInstalled;
 
   const codexDetected = fs.existsSync(CODEX_DIR);
@@ -522,7 +528,7 @@ export function getIntegrationsStatus() {
       id: 'antigravity',
       name: 'Antigravity',
       iconUrl: '/api/icons/tool/antigravity',
-      subtitle: 'Lifecycle hooks (~/.gemini/config/hooks.json) + MCP + live transcript watcher',
+      subtitle: 'Antigravity plugin (~/.gemini/config/plugins/incontrol) + Hooks + MCP + watcher',
       detected: agyDetected,
       autoWatched: agyDetected,
       configured: agyFullyConfigured,
@@ -577,22 +583,58 @@ export function getIntegrationsStatus() {
 /**
  * One-click installer for any integration directly from the UI.
  */
+function stripLegacyIncontrolHooks() {
+  if (!fs.existsSync(AGY_HOOKS_CONFIG)) return;
+  try {
+    const raw = JSON.parse(fs.readFileSync(AGY_HOOKS_CONFIG, 'utf8'));
+    if (!raw || typeof raw !== 'object') return;
+    let changed = false;
+    if (raw.hooks && typeof raw.hooks === 'object') {
+      for (const [eventName, entries] of Object.entries(raw.hooks)) {
+        if (!Array.isArray(entries)) continue;
+        const filtered = entries.filter((entry) => !JSON.stringify(entry).includes('incontrol'));
+        if (filtered.length !== entries.length) {
+          changed = true;
+          if (filtered.length) raw.hooks[eventName] = filtered;
+          else delete raw.hooks[eventName];
+        }
+      }
+    }
+    if (changed) {
+      fs.writeFileSync(AGY_HOOKS_CONFIG, JSON.stringify(raw, null, 2));
+    }
+  } catch {}
+}
+
 export function installIntegration(targetId) {
   if (targetId === 'antigravity') {
+    const agyBin = `"${process.execPath}" "${BIN_PATH}"`;
+    const agyHooks = getAgyHooksConfig(agyBin);
+    const pluginManifest = {
+      name: 'incontrol',
+      displayName: 'InControl',
+      version: '1.0.0',
+      description: 'Two-way steering, approvals, and status hooks for InControl Mission Control.',
+      hooks: './hooks.json',
+      mcpServers: './mcp_config.json',
+    };
+    const pluginMcp = {
+      mcpServers: {
+        incontrol: {
+          command: process.execPath,
+          args: [BIN_PATH, 'mcp'],
+        },
+      },
+    };
+    fs.mkdirSync(AGY_PLUGIN_DIR, { recursive: true });
+    fs.writeFileSync(AGY_PLUGIN_MANIFEST, JSON.stringify(pluginManifest, null, 2));
+    fs.writeFileSync(AGY_PLUGIN_HOOKS, JSON.stringify(agyHooks, null, 2));
+    fs.writeFileSync(AGY_PLUGIN_MCP, JSON.stringify(pluginMcp, null, 2));
     upsertJsonMcpConfig(AGY_MCP_CONFIG, 'Antigravity');
-    const agyHooks = getAgyHooksConfig(`node ${BIN_PATH}`);
-    let existingHooks = {};
-    if (fs.existsSync(AGY_HOOKS_CONFIG)) {
-      try {
-        existingHooks = JSON.parse(fs.readFileSync(AGY_HOOKS_CONFIG, 'utf8'));
-      } catch {}
-    }
-    Object.assign(existingHooks, agyHooks);
-    fs.mkdirSync(AGY_CONFIG_DIR, { recursive: true });
-    fs.writeFileSync(AGY_HOOKS_CONFIG, JSON.stringify(existingHooks, null, 2));
+    stripLegacyIncontrolHooks();
     return {
       ok: true,
-      message: 'Installed Antigravity hooks.json & mcp_config.json into ~/.gemini/config/',
+      message: 'Installed InControl Antigravity plugin (hooks + MCP) in ~/.gemini/config/plugins/incontrol/',
     };
   }
 
@@ -858,6 +900,82 @@ function resolveCodexBin() {
   return 'codex';
 }
 
+export function inspectAgentDelivery(store, agent) {
+  if (!agent) {
+    return { ready: false, mode: 'missing', warning: 'Agent not found.' };
+  }
+  if (store?.stdinHandlers?.has?.(agent.id)) {
+    return { ready: true, mode: 'stdin' };
+  }
+  const tool = (agent.provider || agent.tool || agent.toolKey || '').toLowerCase();
+  const isIdle = agent.status === 'idle';
+
+  if (tool === 'antigravity') {
+    const hooksReady =
+      fileContains(AGY_PLUGIN_HOOKS, 'incontrol') || fileContains(AGY_HOOKS_CONFIG, 'incontrol');
+    const mcpReady =
+      fileContains(AGY_PLUGIN_MCP, 'incontrol') || fileContains(AGY_MCP_CONFIG, 'incontrol');
+    if (!hooksReady) {
+      return {
+        ready: false,
+        mode: 'unconfigured',
+        warning:
+          'Queued, but Antigravity two-way hooks are not installed yet — click "+ Connect" -> Setup Antigravity so Security Check & Steer reach your session.',
+      };
+    }
+    return {
+      ready: true,
+      mode: mcpReady ? 'plugin' : 'hook',
+      idleNote: isIdle
+        ? 'Queued for next Antigravity turn (hooks inject queued instructions on next prompt or step).'
+        : undefined,
+    };
+  }
+
+  if (tool === 'codex') {
+    const hasThread = Boolean(agent.metadata?.threadId || agent.metadata?.sessionFile);
+    const hasMcp = fileContains(CODEX_CONFIG_TOML, 'incontrol');
+    if (hasThread || hasMcp) {
+      return {
+        ready: true,
+        mode: hasThread ? 'codex-thread' : 'mcp',
+      };
+    }
+    return {
+      ready: false,
+      mode: 'unconfigured',
+      warning:
+        'Queued, but Codex CLI / MCP delivery is not configured yet — click "+ Connect" -> Setup Codex.',
+    };
+  }
+
+  if (tool === 'claude-code') {
+    if (fileContains(CLAUDE_SETTINGS, 'incontrol')) {
+      return { ready: true, mode: 'hook' };
+    }
+    return {
+      ready: false,
+      mode: 'unconfigured',
+      warning:
+        'Queued, but Claude Code hooks are not installed yet — click "+ Connect" -> Setup Claude Code.',
+    };
+  }
+
+  if (tool === 'cursor') {
+    if (fileContains(CURSOR_MCP_CONFIG, 'incontrol')) {
+      return { ready: true, mode: 'mcp' };
+    }
+    return {
+      ready: false,
+      mode: 'unconfigured',
+      warning:
+        'Queued, but Cursor MCP is not installed yet — click "+ Connect" -> Setup Cursor.',
+    };
+  }
+
+  return { ready: true, mode: 'queue' };
+}
+
 function queueCodexThreadMessage(threadId, text, cwd, store, agentId) {
   const bin = resolveCodexBin();
   const child = spawn(bin, ['queue', '--thread', threadId, '--message', text], {
@@ -868,12 +986,29 @@ function queueCodexThreadMessage(threadId, text, cwd, store, agentId) {
   child.stderr.on('data', (d) => {
     stderr += d.toString();
   });
+  child.on('error', (err) => {
+    const agent = store.agents.get(agentId);
+    if (!agent) return;
+    store._appendLog(agent, {
+      type: 'error',
+      message: `[InControl] Failed to run "${bin} queue": ${err.message}`,
+      timestamp: Date.now(),
+    });
+    agent.currentStep = `Queued for MCP inbox (CLI unavailable): "${text.slice(0, 48)}"`;
+    store.emit('change', { type: 'agent_updated', agent: store.serializeAgent(agent) });
+  });
   child.on('close', (code) => {
     const agent = store.agents.get(agentId);
     if (!agent) return;
     if (code === 0) {
       agent.currentStep = `Queued in ChatGPT/Codex: "${text.slice(0, 48)}"`;
-    } else if (stderr.trim()) {
+    } else {
+      const detail = stderr.trim().split('\n').pop() || `exit ${code}`;
+      store._appendLog(agent, {
+        type: 'info',
+        message: `[InControl] codex queue exited (${detail}); left in MCP inbox`,
+        timestamp: Date.now(),
+      });
       agent.currentStep = `Queued for MCP inbox: "${text.slice(0, 48)}"`;
     }
     store.emit('change', { type: 'agent_updated', agent: store.serializeAgent(agent) });

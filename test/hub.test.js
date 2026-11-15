@@ -888,3 +888,80 @@ test('auto context sync: backfills unsaved ledger days, deduplicates uploads, an
     else process.env.INCONTROL_DISABLE_HOME_SCAN = prevScan;
   }
 });
+
+test('hub: drain:false events preserve queued Steer & Security Check messages until hook drains', async () => {
+  const hub = await createInControlHub({ port: 4791, macNotifications: false, token: 't', autoWatch: false });
+  const base = 'http://localhost:4791';
+  try {
+    await fetch(`${base}/api/agents/event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: 'agy-drain-test',
+        name: 'Antigravity',
+        provider: 'antigravity',
+        status: 'working',
+        currentStep: 'Editing hub.js',
+        drain: false,
+      }),
+    });
+
+    const fnRes = await (
+      await fetch(`${base}/api/agents/agy-drain-test/function`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ functionId: 'fn_security' }),
+      })
+    ).json();
+    assert.equal(fnRes.ok, true);
+    assert.equal(fnRes.type, 'prompt');
+    assert.equal(typeof fnRes.delivery?.mode, 'string');
+    assert.equal(typeof fnRes.delivery?.ready, 'boolean');
+
+    const steerRes = await (
+      await fetch(`${base}/api/agents/agy-drain-test/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reply', text: 'Use timing-safe compare', sourceDevice: 'Mac Panel' }),
+      })
+    ).json();
+    assert.equal(steerRes.ok, true);
+    assert.equal(typeof steerRes.delivery?.mode, 'string');
+    assert.equal(typeof steerRes.delivery?.ready, 'boolean');
+
+    // Status-only PreToolUse / watcher update must NOT wipe the queued messages
+    const statusRes = await (
+      await fetch(`${base}/api/agents/event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 'agy-drain-test',
+          status: 'working',
+          currentStep: 'Running run_command',
+          drain: false,
+        }),
+      })
+    ).json();
+    assert.deepEqual(statusRes.queuedMessages, []);
+    assert.equal(statusRes.agent.queuedMessages.length, 2);
+
+    // PreInvocation / Stop hook event drains both messages cleanly in order
+    const hookRes = await (
+      await fetch(`${base}/api/agents/event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 'agy-drain-test',
+          status: 'working',
+          currentStep: 'Next invocation',
+        }),
+      })
+    ).json();
+    assert.equal(hookRes.queuedMessages.length, 2);
+    assert.match(hookRes.queuedMessages[0].text, /security risks/i);
+    assert.equal(hookRes.queuedMessages[1].text, 'Use timing-safe compare');
+    assert.equal(hookRes.agent.queuedMessages.length, 0);
+  } finally {
+    await hub.close();
+  }
+});

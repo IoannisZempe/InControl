@@ -26,6 +26,27 @@ const expandedLogs = new Set();
 const expandedCards = new Set();
 const expandedCardAdvanced = new Set();
 const draftReplies = new Map();
+let activePointerInList = false;
+let lastTypingAt = 0;
+let isComposingReply = false;
+let pendingAgentRender = false;
+let deferredRenderTimer = null;
+
+function flushPendingAgentRender() {
+  clearTimeout(deferredRenderTimer);
+  deferredRenderTimer = null;
+  if (!pendingAgentRender) return;
+  renderAgents();
+}
+
+function scheduleDeferredAgentRender(delayMs = 260) {
+  pendingAgentRender = true;
+  if (deferredRenderTimer) return;
+  deferredRenderTimer = setTimeout(() => {
+    deferredRenderTimer = null;
+    if (pendingAgentRender) renderAgents();
+  }, delayMs);
+}
 
 // ---------------- WebSocket ----------------
 function connect() {
@@ -255,15 +276,33 @@ async function respond(agentId, action, text = '') {
     return;
   }
   const payload = { action, text, sourceDevice: DEVICE_NAME };
-  if (!send({ type: 'respond', agentId, ...payload })) {
-    await fetch(`/api/agents/${encodeURIComponent(agentId)}/respond`, {
+  try {
+    const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/respond`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) {
+      toast(data.error || `Failed to send ${action}`, 3600);
+      return;
+    }
+    draftReplies.delete(agentId);
+    if (data.delivery?.warning) {
+      toast(data.delivery.warning, 4200);
+    } else if (data.delivery?.idleNote) {
+      toast(data.delivery.idleNote, 3200);
+    } else {
+      toast(action === 'reply' ? 'Reply sent' : `Sent: ${action}`);
+    }
+  } catch {
+    if (send({ type: 'respond', agentId, ...payload })) {
+      draftReplies.delete(agentId);
+      toast(action === 'reply' ? 'Reply sent' : `Sent: ${action}`);
+    } else {
+      toast('Connection error — failed to send', 3200);
+    }
   }
-  draftReplies.delete(agentId);
-  toast(action === 'reply' ? 'Reply sent' : `Sent: ${action}`);
 }
 
 async function focusAgent(agentId) {
@@ -418,6 +457,16 @@ function renderAgents() {
   const active = document.activeElement;
   const focusedAgent = active?.dataset?.replyFor;
   const caret = focusedAgent ? active.selectionStart : null;
+
+  if (
+    activePointerInList ||
+    isComposingReply ||
+    (focusedAgent && Date.now() - lastTypingAt < 700)
+  ) {
+    scheduleDeferredAgentRender(300);
+    return;
+  }
+  pendingAgentRender = false;
 
   const agents = state.agents.filter((a) => filter === 'all' || a.status === filter);
 
@@ -864,14 +913,21 @@ document.addEventListener('click', async (e) => {
         return toast(`Sent "${fn?.label || 'function'}" (demo)`);
       }
       el.classList.add('running');
-      const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/function`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ functionId: fnId }),
-      });
-      const data = await res.json().catch(() => ({}));
-      el.classList.remove('running');
-      toast(data.message || data.error || 'Function executed');
+      try {
+        const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/function`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ functionId: fnId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        const msg = data.warning || data.message || data.error || 'Function executed';
+        const duration = data.warning ? 4200 : data.delivery?.idleNote ? 3200 : 1800;
+        toast(msg, duration);
+      } catch {
+        toast('Failed to reach InControl hub', 3200);
+      } finally {
+        el.classList.remove('running');
+      }
       return;
     }
     case 'toggle-pin-fn': {
@@ -919,9 +975,37 @@ document.addEventListener('submit', (e) => {
   input.value = '';
 });
 
+document.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('#agent-list')) {
+    activePointerInList = true;
+  }
+});
+['pointerup', 'pointercancel'].forEach((evt) => {
+  document.addEventListener(evt, () => {
+    if (!activePointerInList) return;
+    activePointerInList = false;
+    if (pendingAgentRender) {
+      setTimeout(flushPendingAgentRender, 160);
+    }
+  });
+});
+
+document.addEventListener('compositionstart', (e) => {
+  if (e.target.dataset?.replyFor) isComposingReply = true;
+});
+document.addEventListener('compositionend', (e) => {
+  if (e.target.dataset?.replyFor) {
+    isComposingReply = false;
+    lastTypingAt = Date.now();
+  }
+});
+
 document.addEventListener('input', (e) => {
   const id = e.target.dataset?.replyFor;
-  if (id) draftReplies.set(id, e.target.value);
+  if (id) {
+    draftReplies.set(id, e.target.value);
+    lastTypingAt = Date.now();
+  }
 });
 
 $('#btn-project').addEventListener('click', () => {
@@ -1465,12 +1549,12 @@ function copy(text) {
     () => toast('Copy failed')
   );
 }
-function toast(msg) {
+function toast(msg, durationMs = 1800) {
   const t = document.createElement('div');
   t.className = 'toast';
   t.textContent = msg;
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 1800);
+  setTimeout(() => t.remove(), durationMs);
 }
 function detectDevice() {
   const ua = navigator.userAgent;

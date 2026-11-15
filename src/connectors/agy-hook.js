@@ -156,6 +156,7 @@ export async function runAgyHook(args = []) {
         headers: hubHeaders(),
         body: JSON.stringify({
           ...baseAgent,
+          drain: false,
           status: 'working',
           currentStep: `${toolName}: ${String(summary).slice(0, 90)}`,
           incrementTools: true,
@@ -176,6 +177,7 @@ export async function runAgyHook(args = []) {
           headers: hubHeaders(),
           body: JSON.stringify({
             ...baseAgent,
+            drain: false,
             status: 'working',
             currentStep: `${toolName} failed: ${String(payload.error).slice(0, 80)}`,
             logType: 'error',
