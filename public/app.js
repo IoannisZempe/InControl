@@ -574,8 +574,9 @@ function renderCard(a) {
   const updated = timeAgo(a.metrics?.updatedAt, true);
   const showLogs = expandedLogs.has(a.id);
   const hasDraft = Boolean((draftReplies.get(a.id) || '').trim());
-  const isUrgentOrReview = a.status === 'needs_input' || a.status === 'needs_attention';
-  const isCardExpanded = isUrgentOrReview || expandedCards.has(a.id) || expandedCardAdvanced.has(a.id) || hasDraft;
+  const isActionable =
+    a.status === 'needs_input' || a.status === 'needs_attention' || a.status === 'working';
+  const isCardExpanded = isActionable || expandedCards.has(a.id) || expandedCardAdvanced.has(a.id) || hasDraft;
   const fnBarHtml = isCardExpanded ? renderFunctionBar(a) : '';
 
   let decisionHtml = '';
@@ -634,7 +635,7 @@ function renderCard(a) {
           .join('')}</ul>`
       : '';
 
-  const showExpandBtn = !isUrgentOrReview;
+  const showExpandBtn = a.status === 'idle';
   const metaLine = [esc(a.name), a.branch ? `<span class="branch-tag">${ICON_BRANCH}<span>${esc(a.branch)}</span></span>` : '']
     .filter(Boolean)
     .join('<span class="meta-sep">·</span>');

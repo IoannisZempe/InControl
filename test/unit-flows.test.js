@@ -174,6 +174,46 @@ test('unit: Antigravity plugin installer & inspectAgentDelivery() in isolated HO
     const afterIdle = inspectAgentDelivery(store, idleAgy);
     assert.equal(afterIdle.ready, true);
     assert.match(afterIdle.idleNote, /next Antigravity turn/i);
+
+    // Verify scanAntigravitySessions() promotes confirmation questions into needs_input
+    // and keeps completed responses in needs_attention well past 45s (2 minutes old)
+    const { scanAntigravitySessions } = await import('./src/connectors/auto-watcher.js');
+    const seen = new Map();
+    const dismissed = new Set();
+    const twoMinsAgo = new Date(Date.now() - 120_000);
+
+    const convPromptDir = path.join(home, '.gemini', 'antigravity', 'brain', 'convprompt1234', '.system_generated', 'logs');
+    fs.mkdirSync(convPromptDir, { recursive: true });
+    const promptTranscript = path.join(convPromptDir, 'transcript.jsonl');
+    fs.writeFileSync(
+      promptTranscript,
+      JSON.stringify({
+        step_index: 4,
+        type: 'USER_INPUT',
+        content: '<USER_REQUEST>Push them</USER_REQUEST>',
+      }) +
+        '\\n' +
+        JSON.stringify({
+          step_index: 5,
+          type: 'PLANNER_RESPONSE',
+          content: 'Please confirm before I run git write commands.\\n\\nReply **"commit and push to main"** (or adjust the message).',
+          tool_calls: [{ name: 'default_api:run_command', arguments: { Path: '/Users/demo/Repo/InControl/a.js' } }],
+        }).replace('"tool_calls":[{"name":"default_api:run_command","arguments":{"Path":"/Users/demo/Repo/InControl/a.js"}}]', '"tool_calls":[]') +
+        '\\n'
+    );
+    fs.utimesSync(promptTranscript, twoMinsAgo, twoMinsAgo);
+
+    scanAntigravitySessions(store, seen, dismissed);
+    const promptAgent = store.agents.get('agy-convprom');
+    assert.equal(promptAgent.status, 'needs_input', '2-minute-old confirmation question must stay in needs_input');
+    assert.equal(promptAgent.pendingPrompt.options[0].label, 'Reply "commit and push to main"');
+    assert.equal(promptAgent.pendingPrompt.options[0].replyText, 'commit and push to main');
+
+    // Clicking Reply or Dismiss must not immediately revert back to needs_input on next scan
+    store.respondToAgent('agy-convprom', { action: 'reply', text: 'commit and push to main', sourceDevice: 'Mac Panel' });
+    assert.equal(store.agents.get('agy-convprom').status, 'working');
+    scanAntigravitySessions(store, seen, dismissed);
+    assert.equal(store.agents.get('agy-convprom').status, 'working', 'Fresh user reply must not be overwritten by stale transcript');
   `;
 
   try {

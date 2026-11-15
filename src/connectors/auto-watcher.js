@@ -51,7 +51,7 @@ export function startAutoWatcher(store, intervalMs = 1500) {
 /**
  * Watches ~/.gemini/antigravity/brain/<conv-id>/.system_generated/logs/transcript.jsonl
  */
-function scanAntigravitySessions(store, seenMtimes, dismissedPrompts = new Set()) {
+export function scanAntigravitySessions(store, seenMtimes = new Map(), dismissedPrompts = new Set()) {
   if (!fs.existsSync(AGY_BRAIN_DIR)) return;
 
   const entries = fs.readdirSync(AGY_BRAIN_DIR, { withFileTypes: true });
@@ -80,10 +80,32 @@ function scanAntigravitySessions(store, seenMtimes, dismissedPrompts = new Set()
     const agentId = `agy-${item.convId.slice(0, 8)}`;
     const existing = store.agents.get(agentId);
     const ageMs = Date.now() - item.mtimeMs;
-    const shouldExpireAttention = existing?.status === 'needs_attention' && ageMs >= 45_000;
-    const shouldExpireWorking = existing?.status === 'working' && ageMs >= 5 * 60_000;
+    const hasFreshUserOrHookState =
+      existing &&
+      (existing.metrics?.updatedAt || 0) > item.mtimeMs &&
+      (existing.status === 'working' ||
+        existing.status === 'needs_input' ||
+        existing.status === 'needs_attention' ||
+        (existing.status === 'idle' && existing.currentStep === 'Acknowledged by user'));
+
+    const activePromptId = existing?.pendingPrompt?.requestId;
+    if (existing && !activePromptId && existing._lastAgyPromptId && existing.metrics?.promptsAnswered > (existing._lastAgyAnsweredCount || 0)) {
+      dismissedPrompts.add(existing._lastAgyPromptId);
+    }
+
+    const shouldExpirePrompt = existing?.status === 'needs_input' && ageMs >= 45 * 60_000;
+    const shouldExpireAttention =
+      existing?.status === 'needs_attention' && ageMs >= 15 * 60_000 && !hasFreshUserOrHookState;
+    const shouldExpireWorking =
+      existing?.status === 'working' && ageMs >= 5 * 60_000 && (existing.metrics?.updatedAt || 0) <= item.mtimeMs;
+
+    if (hasFreshUserOrHookState && !shouldExpirePrompt && !shouldExpireAttention && !shouldExpireWorking) {
+      seenMtimes.set(`agy:${item.convId}`, item.mtimeMs);
+      continue;
+    }
+
     const key = `agy:${item.convId}`;
-    if (seenMtimes.get(key) === item.mtimeMs && !shouldExpireAttention && !shouldExpireWorking) {
+    if (seenMtimes.get(key) === item.mtimeMs && !shouldExpireAttention && !shouldExpireWorking && !shouldExpirePrompt) {
       continue;
     }
     seenMtimes.set(key, item.mtimeMs);
@@ -167,13 +189,36 @@ function scanAntigravitySessions(store, seenMtimes, dismissedPrompts = new Set()
         status = 'working';
         currentStep = 'Thinking…';
       } else if (lastStep.type === 'PLANNER_RESPONSE' && toolCalls.length === 0) {
-        if (ageMs < 45_000) {
+        const reqId = `agy_turn_${item.convId.slice(0, 8)}_${lastStep.step_index ?? Math.round(item.mtimeMs)}`;
+        const wasDismissed =
+          dismissedPrompts.has(reqId) ||
+          (existing?.currentStep === 'Acknowledged by user' &&
+            (existing.metrics?.updatedAt || 0) >= item.mtimeMs);
+        const actionReq =
+          lastStep.content && !wasDismissed
+            ? detectActionRequest(lastStep.content, false, 'Antigravity')
+            : null;
+
+        if (actionReq && ageMs < 45 * 60_000) {
+          status = 'needs_input';
+          currentStep = actionReq.step;
+          attentionReason = null;
+          pendingPrompt = {
+            requestId: reqId,
+            question: actionReq.question,
+            details: actionReq.details,
+            options: actionReq.options,
+            allowFreeText: true,
+            createdAt: item.mtimeMs,
+          };
+        } else if (!wasDismissed && ageMs < 15 * 60_000) {
           status = 'needs_attention';
           currentStep = 'Response complete';
           attentionReason = (lastStep.content || 'Finished response — ready for review')
             .replace(/[#*`]/g, '')
+            .replace(/\s+/g, ' ')
             .trim()
-            .slice(0, 110);
+            .slice(0, 140);
         } else {
           status = 'idle';
           currentStep = 'Idle';
@@ -189,7 +234,7 @@ function scanAntigravitySessions(store, seenMtimes, dismissedPrompts = new Set()
       store.removeAgent('live-antigravity-incontrol');
     }
 
-    store.upsertAgent({
+    const updatedAgent = store.upsertAgent({
       id: agentId,
       name: 'Antigravity',
       provider: 'antigravity',
@@ -204,6 +249,10 @@ function scanAntigravitySessions(store, seenMtimes, dismissedPrompts = new Set()
       pendingPrompt,
       updatedAt: item.mtimeMs,
     });
+    if (pendingPrompt?.requestId) {
+      updatedAgent._lastAgyPromptId = pendingPrompt.requestId;
+      updatedAgent._lastAgyAnsweredCount = updatedAgent.metrics?.promptsAnswered || 0;
+    }
   }
 }
 
@@ -408,7 +457,7 @@ function scanCodexAndChatGptSessions(store, seenMtimes, dismissedPrompts = new S
               const reqId = `codex_turn_${p.turn_id || ev.ordinal || item.file.mtimeMs}`;
               const actionReq =
                 rawMsg && !rawMsg.startsWith('{')
-                  ? detectCodexActionRequest(rawMsg, turnHadHandoff, ideName)
+                  ? detectActionRequest(rawMsg, turnHadHandoff, ideName)
                   : null;
 
               if (actionReq && !dismissedPrompts.has(reqId) && ageMs < 45 * 60_000) {
@@ -424,7 +473,7 @@ function scanCodexAndChatGptSessions(store, seenMtimes, dismissedPrompts = new S
                   createdAt: item.file.mtimeMs,
                 };
               } else {
-                st = ageMs < 45_000 ? 'needs_attention' : 'idle';
+                st = ageMs < 15 * 60_000 ? 'needs_attention' : 'idle';
                 step = st === 'needs_attention' ? 'Turn completed' : 'Idle';
                 const cleanMsg = rawMsg.replace(/\s+/g, ' ');
                 if (cleanMsg && !cleanMsg.startsWith('{')) {
@@ -731,10 +780,10 @@ function readTailLines(filePath, maxLines = 60) {
 }
 
 /**
- * Detects when a Codex / ChatGPT Desktop turn ends with a message asking the user
- * to confirm an action, complete a browser sign-in/handoff, or reply with a phrase.
+ * Detects when an agent turn (Codex, ChatGPT Desktop, or Antigravity) ends with a message
+ * asking the user to confirm an action, complete a browser sign-in/handoff, or reply with a phrase.
  */
-function detectCodexActionRequest(rawMsg, turnHadHandoff = false, ideName = 'ChatGPT App') {
+export function detectActionRequest(rawMsg, turnHadHandoff = false, ideName = 'ChatGPT App') {
   if (!rawMsg) return null;
   const boundedMsg = String(rawMsg).slice(-4000);
 
@@ -755,10 +804,10 @@ function detectCodexActionRequest(rawMsg, turnHadHandoff = false, ideName = 'Cha
   let actionIdx = paragraphs.length - 1;
   if (
     paragraphs.length > 1 &&
-    !/\b(?:confirm|say|tell me|sign in|log in|approve|authorize|should i|would you|do you|\?)/i.test(
+    !/\b(?:confirm|say|reply|respond|tell me|sign in|log in|approve|authorize|should i|would you|do you|\?)/i.test(
       paragraphs[actionIdx]
     ) &&
-    /\b(?:confirm|say|tell me|sign in|log in|approve|authorize|should i|would you|do you|\?)/i.test(
+    /\b(?:confirm|say|reply|respond|tell me|sign in|log in|approve|authorize|should i|would you|do you|\?)/i.test(
       paragraphs[actionIdx - 1]
     )
   ) {
@@ -770,9 +819,9 @@ function detectCodexActionRequest(rawMsg, turnHadHandoff = false, ideName = 'Cha
   const prevParas = otherParas.join('\n• ').slice(0, 280) || null;
   const tailText = paragraphs.slice(-2).join(' ');
 
-  // 1. Explicit quoted/bolded phrase requested: e.g. Say **“approve quote”**, tell me **done**, reply with "yes"
+  // 1. Explicit quoted/bolded phrase requested: e.g. Say **“approve quote”**, Reply **"commit and push to main"**, reply with "yes"
   const phraseMatch = boundedMsg.match(
-    /\b(?:say|reply\s+with|type|tell\s+me)\s+(?:\*\*["“'‘`]?|["“'‘`])([^*"”'’`\n.,!]{1,32})(?:["”'’`]?\*\*|["”'’`])/i
+    /\b(?:say|reply(?:\s+with)?|respond(?:\s+with)?|type|tell\s+me)\s+(?:\*\*["“'‘`]?|["“'‘`])([^*"”'’`\n.,!]{1,48})(?:["”'’`]?\*\*|["”'’`])/i
   );
   const candidatePhrase = phraseMatch ? phraseMatch[1].trim() : null;
   const isSpecificPhrase =
@@ -908,7 +957,7 @@ export function inspectAgentDelivery(store, agent) {
     return { ready: true, mode: 'stdin' };
   }
   const tool = (agent.provider || agent.tool || agent.toolKey || '').toLowerCase();
-  const isIdle = agent.status === 'idle';
+  const isTurnEnded = agent.status === 'idle' || agent.status === 'needs_attention';
 
   if (tool === 'antigravity') {
     const hooksReady =
@@ -926,8 +975,8 @@ export function inspectAgentDelivery(store, agent) {
     return {
       ready: true,
       mode: mcpReady ? 'plugin' : 'hook',
-      idleNote: isIdle
-        ? 'Queued for next Antigravity turn (hooks inject queued instructions on next prompt or step).'
+      idleNote: isTurnEnded
+        ? 'Queued — this turn has ended, so it applies on the next Antigravity turn (click Focus if waiting at prompt).'
         : undefined,
     };
   }

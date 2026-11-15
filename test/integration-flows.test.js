@@ -520,9 +520,13 @@ test('flow: Panel client (public/app.js) protects clicks/typing during WS update
     network: {},
   };
 
-  // Initial WS state_sync renders the card cleanly
+  // Initial WS state_sync renders the working card cleanly WITH custom functions (Security Check) visible
   wsInstance.onmessage({ data: JSON.stringify({ type: 'state_sync', state: sampleState }) });
   assert.equal(agentListEl.renderWrites, 1);
+  assert.ok(
+    agentListEl.innerHTML.includes('data-fn="fn_security"'),
+    'Active (working) cards must render pinned function bar (Security Check) without needing manual expand'
+  );
 
   // 1) Simulate pointerdown inside #agent-list, THEN incoming WS state_sync mid-click
   const secBtn = {
