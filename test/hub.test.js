@@ -309,10 +309,11 @@ test('apple homeview & siri voice: pairing redirect, spoken status, and opt-in v
   }
 });
 
-test('apple homekit bridge: publishes Waiting sensor & Approve switch with valid generated PIN', async () => {
+test('apple homekit bridge: publishes separate Waiting sensor & Approve switch accessories and resolves waiting agent', async () => {
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
+  const { Categories, Characteristic, Service } = await import('hap-nodejs');
   const { createHomeKitBridge } = await import('../src/server/homekit.js');
   const { AgentStore } = await import('../src/server/store.js');
 
@@ -320,9 +321,10 @@ test('apple homekit bridge: publishes Waiting sensor & Approve switch with valid
   const prevHome = process.env.INCONTROL_HOME;
   process.env.INCONTROL_HOME = tmpHome;
 
+  let allowApproval = true;
   const store = new AgentStore();
   const hk = createHomeKitBridge(store, {
-    getSettings: () => ({ homekitEnabled: true, allowHomekitApproval: true }),
+    getSettings: () => ({ homekitEnabled: true, allowHomekitApproval: allowApproval }),
     advertise: false,
   });
 
@@ -333,8 +335,45 @@ test('apple homekit bridge: publishes Waiting sensor & Approve switch with valid
     assert.ok(status.setupUri.startsWith('X-HM://'));
     assert.match(status.setupQrSvg, /<svg/);
 
-    store.upsertAgent({ id: 'hk-1', name: 'Codex', status: 'needs_input', pendingPrompt: { question: 'Deploy?' } });
+    // Verify true HAP Bridge hosting two separate bridged accessories/tiles
+    const bridge = hk.getBridge();
+    assert.ok(bridge, 'HomeKit bridge instance should be exposed');
+    assert.equal(bridge.bridgedAccessories.length, 2);
+    const sensorAcc = bridge.bridgedAccessories.find((a) => a.category === Categories.SENSOR);
+    const switchAcc = bridge.bridgedAccessories.find((a) => a.category === Categories.SWITCH);
+    assert.ok(sensorAcc && switchAcc, 'Sensor and Switch must be separate bridged accessories');
+    assert.ok(sensorAcc.displayName.startsWith('Agent Needs Input'));
+    assert.ok(switchAcc.displayName.startsWith('Approve Waiting Agent'));
+
+    const motionChar = sensorAcc
+      .getService(Service.MotionSensor)
+      .getCharacteristic(Characteristic.MotionDetected);
+    const switchChar = switchAcc
+      .getService(Service.Switch)
+      .getCharacteristic(Characteristic.On);
+
+    // Trigger blocking ask -> MotionDetected flips true -> HomeKit switch disabled first must NOT approve
+    allowApproval = false;
+    const askBlockedPromise = store.requestInput('hk-blocked', {
+      name: 'Codex',
+      workspace: '/tmp/hk-app',
+      question: 'Deploy with HomeKit disabled?',
+      wait: true,
+    });
     assert.equal(hk.getStatus().waitingCount, 1);
+    assert.equal(motionChar.value, true);
+
+    await switchChar.setValue(true);
+    assert.equal(hk.getStatus().waitingCount, 1, 'Disabled HomeKit approval must not resolve prompt');
+
+    // Enable HomeKit approval -> toggling switch resolves waiting agent & resets switch cleanly
+    allowApproval = true;
+    await switchChar.setValue(true);
+    const resolved = await askBlockedPromise;
+    assert.equal(resolved.action, 'approve');
+    assert.equal(resolved.sourceDevice, 'Apple HomeKit');
+    assert.equal(hk.getStatus().waitingCount, 0);
+    assert.equal(motionChar.value, false);
   } finally {
     await hk.stop({ destroyPairing: true });
     if (prevHome === undefined) delete process.env.INCONTROL_HOME;

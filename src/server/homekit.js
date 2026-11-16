@@ -5,6 +5,7 @@ import path from 'node:path';
 import QRCode from 'qrcode';
 import {
   Accessory,
+  Bridge,
   Categories,
   Characteristic,
   HAPStorage,
@@ -76,9 +77,20 @@ function loadOrCreateHomeKitCredentials({ reset = false } = {}) {
 }
 
 /**
- * Local Apple HomeKit (HAP) bridge exposing:
- *  - "Agents Waiting" MotionSensor (lights up Home / HomeView when an agent needs input)
- *  - "Approve Agent" Switch (momentary switch to approve the oldest waiting agent)
+ * Builds an AccessoryInformation helper for the bridge and each bridged accessory.
+ */
+function configureAccessoryInfo(acc, model, serial) {
+  acc
+    .getService(Service.AccessoryInformation)
+    ?.setCharacteristic(Characteristic.Manufacturer, 'InControl')
+    .setCharacteristic(Characteristic.Model, model)
+    .setCharacteristic(Characteristic.SerialNumber, serial);
+}
+
+/**
+ * Local Apple HomeKit (HAP) bridge exposing two separate accessories/tiles:
+ *  - "Agent Needs Input" MotionSensor (lights up Home / HomeView notifications when an agent waits)
+ *  - "Approve Waiting Agent" Switch (momentary switch to approve the oldest waiting agent via Home/Siri)
  */
 export function createHomeKitBridge(store, { getSettings, advertise = true } = {}) {
   const persistDir = path.join(getHomeKitDir(), 'homekit-persist');
@@ -90,7 +102,7 @@ export function createHomeKitBridge(store, { getSettings, advertise = true } = {
   }
 
   let creds = loadOrCreateHomeKitCredentials();
-  let accessory = null;
+  let bridge = null;
   let motionService = null;
   let approveSwitch = null;
   let approveActive = false;
@@ -114,26 +126,36 @@ export function createHomeKitBridge(store, { getSettings, advertise = true } = {
     lastError = null;
     try {
       creds = loadOrCreateHomeKitCredentials();
-      accessory = new Accessory('InControl Agents', uuid.generate(`incontrol:hk:${creds.username}`));
-      accessory.username = creds.username;
-      accessory.pincode = creds.pincode;
-      accessory.category = Categories.BRIDGE;
+      const serialBase = creds.username.replace(/:/g, '');
 
-      const info = accessory.getService(Service.AccessoryInformation);
-      info
-        ?.setCharacteristic(Characteristic.Manufacturer, 'InControl')
-        .setCharacteristic(Characteristic.Model, 'Mission Control Bridge')
-        .setCharacteristic(Characteristic.SerialNumber, creds.username.replace(/:/g, ''));
+      bridge = new Bridge('InControl Agents', uuid.generate(`incontrol:hk:bridge:${creds.username}`));
+      bridge.username = creds.username;
+      bridge.pincode = creds.pincode;
+      bridge.category = Categories.BRIDGE;
+      configureAccessoryInfo(bridge, 'Mission Control Bridge', serialBase);
 
-      // 1. Motion sensor triggers Apple Home & HomeView notifications when an agent waits
-      motionService = accessory.addService(Service.MotionSensor, 'Agent Needs Input', 'waiting');
+      // 1. Bridged Accessory: Motion sensor triggers Apple Home notifications when an agent waits
+      const waitingSensorAcc = new Accessory(
+        'Agent Needs Input',
+        uuid.generate(`incontrol:hk:waiting:${creds.username}`)
+      );
+      waitingSensorAcc.category = Categories.SENSOR;
+      configureAccessoryInfo(waitingSensorAcc, 'Waiting Agent Sensor', `${serialBase}-WAIT`);
+      motionService = waitingSensorAcc.addService(Service.MotionSensor, 'Agent Needs Input');
       motionService
         .getCharacteristic(Characteristic.MotionDetected)
         .onGet(() => store.getSummaryCounts().needs_input > 0);
       motionService.getCharacteristic(Characteristic.StatusActive).onGet(() => true);
+      bridge.addBridgedAccessory(waitingSensorAcc);
 
-      // 2. Momentary Switch to approve the oldest waiting agent directly from Home app / HomeView
-      approveSwitch = accessory.addService(Service.Switch, 'Approve Waiting Agent', 'approve');
+      // 2. Bridged Accessory: Momentary switch gets its own tile & Siri name to approve oldest waiting agent
+      const approveSwitchAcc = new Accessory(
+        'Approve Waiting Agent',
+        uuid.generate(`incontrol:hk:approve:${creds.username}`)
+      );
+      approveSwitchAcc.category = Categories.SWITCH;
+      configureAccessoryInfo(approveSwitchAcc, 'Approve Switch', `${serialBase}-APPR`);
+      approveSwitch = approveSwitchAcc.addService(Service.Switch, 'Approve Waiting Agent');
       approveSwitch
         .getCharacteristic(Characteristic.On)
         .onGet(() => approveActive)
@@ -145,7 +167,11 @@ export function createHomeKitBridge(store, { getSettings, advertise = true } = {
           const settings = getSettings ? getSettings() : {};
           if (settings.allowHomekitApproval === false) {
             approveActive = false;
-            setTimeout(() => approveSwitch?.updateCharacteristic(Characteristic.On, false), 150);
+            approveResetTimer = setTimeout(
+              () => approveSwitch?.updateCharacteristic(Characteristic.On, false),
+              150
+            );
+            approveResetTimer.unref?.();
             return;
           }
           const waiting = pickTargetAgent(store, { preferWaiting: true });
@@ -159,9 +185,11 @@ export function createHomeKitBridge(store, { getSettings, advertise = true } = {
             approveActive = false;
             approveSwitch?.updateCharacteristic(Characteristic.On, false);
           }, 700);
+          approveResetTimer.unref?.();
         });
+      bridge.addBridgedAccessory(approveSwitchAcc);
 
-      await accessory.publish({
+      await bridge.publish({
         username: creds.username,
         pincode: creds.pincode,
         category: Categories.BRIDGE,
@@ -169,7 +197,7 @@ export function createHomeKitBridge(store, { getSettings, advertise = true } = {
         advertiser: advertise ? 'ciao' : undefined,
       });
 
-      setupUri = accessory.setupURI();
+      setupUri = bridge.setupURI();
       setupQrSvg = await QRCode.toString(setupUri, {
         type: 'svg',
         margin: 1,
@@ -180,7 +208,7 @@ export function createHomeKitBridge(store, { getSettings, advertise = true } = {
       store.on('change', onStoreChange);
       syncCharacteristics();
     } catch (err) {
-      lastError = err?.message || 'Failed to start HomeKit accessory';
+      lastError = err?.message || 'Failed to start HomeKit bridge';
       running = false;
     }
     return getStatus();
@@ -190,15 +218,15 @@ export function createHomeKitBridge(store, { getSettings, advertise = true } = {
     store.off('change', onStoreChange);
     clearTimeout(approveResetTimer);
     approveActive = false;
-    if (accessory) {
+    if (bridge) {
       try {
         if (destroyPairing) {
-          await accessory.destroy();
+          await bridge.destroy();
         } else {
-          await accessory.unpublish();
+          await bridge.unpublish();
         }
       } catch {}
-      accessory = null;
+      bridge = null;
       motionService = null;
       approveSwitch = null;
     }
@@ -218,9 +246,9 @@ export function createHomeKitBridge(store, { getSettings, advertise = true } = {
   }
 
   function isPaired() {
-    if (!accessory?._accessoryInfo) return false;
+    if (!bridge?._accessoryInfo) return false;
     try {
-      return Boolean(accessory._accessoryInfo.paired());
+      return Boolean(bridge._accessoryInfo.paired());
     } catch {
       return false;
     }
@@ -248,5 +276,6 @@ export function createHomeKitBridge(store, { getSettings, advertise = true } = {
     resetPairing,
     syncCharacteristics,
     getStatus,
+    getBridge: () => bridge,
   };
 }
