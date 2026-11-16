@@ -26,14 +26,22 @@
     "LICENSE"
   ],
   "type": "module",
+  "main": "./src/sdk/index.js",
+  "exports": {
+    ".": "./src/sdk/index.js",
+    "./sdk": "./src/sdk/index.js"
+  },
   "bin": {
-    "incontrol": "./bin/incontrol.js"
+    "incontrol": "./bin/incontrol.js",
+    "incontrol-agents": "./bin/incontrol.js"
   },
   "scripts": {
     "start": "node ./bin/incontrol.js start",
     "panel": "node ./bin/incontrol.js panel",
+    "service": "node ./bin/incontrol.js service",
     "build:macos": "swiftc macos/InControlPanel.swift -o macos/incontrol-panel -framework Cocoa -framework WebKit",
     "mcp": "node ./bin/incontrol.js mcp",
+    "pack:check": "npm pack --dry-run",
     "test": "node --test test/*.test.js",
     "test:unit": "node --test test/unit-flows.test.js",
     "test:flows": "node --test test/integration-flows.test.js"

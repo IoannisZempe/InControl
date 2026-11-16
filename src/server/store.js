@@ -53,10 +53,15 @@ export class AgentStore extends EventEmitter {
       status: payload.status || existing?.status || 'idle',
       currentTask: payload.currentTask ?? existing?.currentTask ?? 'Ready for instructions',
       currentStep: payload.currentStep ?? existing?.currentStep ?? '',
-      attentionReason: payload.attentionReason ?? existing?.attentionReason ?? null,
+      attentionReason:
+        payload.attentionReason !== undefined ? payload.attentionReason : (existing?.attentionReason ?? null),
       pendingPrompt: payload.pendingPrompt !== undefined ? payload.pendingPrompt : (existing?.pendingPrompt || null),
       windowHint: payload.windowHint ?? existing?.windowHint ?? null,
       pid: payload.pid ?? existing?.pid ?? null,
+      metadata:
+        payload.metadata !== undefined
+          ? { ...(existing?.metadata || {}), ...payload.metadata }
+          : (existing?.metadata || null),
       queuedMessages: existing?.queuedMessages || [],
       logs: existing?.logs || [],
       metrics: {
@@ -67,9 +72,12 @@ export class AgentStore extends EventEmitter {
       },
     };
 
-    // Clear pendingPrompt if transitioning away from needs_input unless explicitly provided
+    // Clear stale prompt/attention details if transitioning into working/another state unless explicitly provided
     if (agent.status !== 'needs_input' && payload.pendingPrompt === undefined) {
       agent.pendingPrompt = null;
+    }
+    if (agent.status === 'working' && payload.attentionReason === undefined) {
+      agent.attentionReason = null;
     }
 
     if (payload.logMessage) {
@@ -231,8 +239,8 @@ export class AgentStore extends EventEmitter {
     const deliveredLive = resolvedWaiter || hasLiveHandler || wasAlreadyWorking;
     const requiresWake = !isDismissOrDeny && !deliveredLive;
 
-    // Queue for hook/polling agents only if a blocking waiter did not already consume the answer
-    if (!resolvedWaiter) {
+    // Queue for hook/polling agents only when neither a blocking waiter nor a live stdin/queue handler consumed the answer
+    if (!resolvedWaiter && !hasLiveHandler) {
       agent.queuedMessages.push({
         id: `msg_${crypto.randomUUID().slice(0, 8)}`,
         action,

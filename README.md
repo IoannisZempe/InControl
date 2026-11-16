@@ -27,10 +27,15 @@
     </td>
     <td valign="top">
       <strong><code>// QUICK START</code></strong>
-      <pre lang="bash">git clone https://github.com/IoannisZempe/InControl.git &amp;&amp; cd InControl
-npm install
-npm start -- --panel   # Hub :4747 + macOS Liquid Glass side panel</pre>
-      <sub>Then open <code>http://localhost:4747</code> or scan the QR code from your phone.</sub>
+      <pre lang="bash"># Option A: Global CLI or npx (Node &gt;= 20)
+npm install -g incontrol-agents
+incontrol start --panel          # Hub :4747 + native macOS side panel
+incontrol service install        # Optional: auto-start hub + panel at login
+
+# Option B: Try in one command or run from source
+npx incontrol-agents start --panel
+# or: git clone https://github.com/IoannisZempe/InControl.git &amp;&amp; cd InControl &amp;&amp; npm install &amp;&amp; npm start -- --panel</pre>
+      <sub>First macOS panel launch compiles cleanly to <code>~/.incontrol/bin/incontrol-panel</code> (requires Xcode CLT). Open <code>http://localhost:4747</code> or scan the QR code from your phone.</sub>
       <br/><br/>
       <strong><code>01 // ATTENTION TRIAGE ENGINE</code></strong><br/>
       Agents are sorted automatically into four live priority lanes:<br/>
@@ -74,9 +79,10 @@ To provision your private **by-day Railway PostgreSQL archive** automatically:
 
 | Agent | Integration | Setup Command |
 |---|---|---|
-| **Claude Code** | Native hooks (`PreToolUse`, `Notification`, `Stop`, `UserPromptSubmit`) | `node bin/incontrol.js setup claude-code --install` |
-| **Antigravity / Cursor / Windsurf / VS Code** | Stdio MCP server + lifecycle hooks | `node bin/incontrol.js setup mcp --ide Cursor` |
-| **ChatGPT Desktop & Codex** | Auto-discovered on macOS + `codex queue` + CLI wrapper | `incontrol wrap --name Codex -- codex` |
+| **Claude Code** | Native hooks (`PreToolUse`, `Notification`, `Stop`, `UserPromptSubmit`) | `incontrol setup claude-code --install` |
+| **Antigravity** | Auto-discovered + plugin (`hooks.json`, MCP & steering rule) | `incontrol setup antigravity` |
+| **Cursor / Windsurf / VS Code** | Stdio MCP server | `incontrol setup cursor` (or `incontrol setup mcp --ide VSCode`) |
+| **ChatGPT Desktop & Codex** | Auto-discovered on macOS + `codex queue` + MCP | `incontrol setup codex` (or `incontrol wrap --name Codex -- codex`) |
 | **Aider / OpenCode / Gemini CLI / any CLI** | Process wrapper piping replies straight to stdin | `incontrol wrap --name Gemini -- gemini` |
 | **Custom Agents** | REST API, WebSocket, Node & Python SDKs | See [SDKs & API](#custom-agents--http-api) below |
 

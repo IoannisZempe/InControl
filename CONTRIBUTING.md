@@ -12,7 +12,7 @@ npm start        # hub at http://localhost:4747
 npm test
 ```
 
-On macOS you can also run `npm run panel` to build and open the native side panel. This needs the Xcode command line tools.
+On macOS you can also run `npm run panel` to compile `~/.incontrol/bin/incontrol-panel` and open the native side panel (requires Xcode command line tools). Run `npm run pack:check` to verify the npm tarball contents.
 
 ## Project layout
 
@@ -44,7 +44,7 @@ Look for issues labelled `good first issue` and `help wanted`.
 
 ## Guidelines
 
-- **Keep dependencies minimal.** The runtime currently depends only on `ws` and `qrcode`. Explain any new dependency in your PR.
+- **Keep dependencies minimal.** The runtime currently depends only on `ws`, `qrcode`, and `hap-nodejs`. Explain any new dependency in your PR.
 - **Never break the agent.** Connectors must fail silently if the hub isn't running.
 - **Keep it local-first.** Nothing gets sent off the user's machine unless they explicitly opt in.
 - Use plain modern JavaScript (ES modules, Node ≥ 20). The UI has no build step and no framework.

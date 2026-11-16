@@ -38,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     var autoMenuItem: NSMenuItem?
     var tileMenuItem: NSMenuItem?
     let hubURL: URL
+    let explicitCliPath: String?
     var panelWidth: CGFloat = 386
     var dockSide: String = "right"
     var popupMode: String = "needs_input"
@@ -50,8 +51,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     var statePollTimer: Timer?
     var lastHubSpawnAttempt: Date = .distantPast
 
-    init(hubURL: URL) {
+    init(hubURL: URL, cliPath: String? = nil) {
         self.hubURL = hubURL
+        self.explicitCliPath = cliPath
         super.init()
     }
 
@@ -244,24 +246,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         }
     }
 
+    func resolveHubLaunchTarget() -> (executable: String, arguments: [String], cwd: URL)? {
+        let fm = FileManager.default
+        let env = ProcessInfo.processInfo.environment
+        let incontrolHome = env["INCONTROL_HOME"] ?? fm.homeDirectoryForCurrentUser.appendingPathComponent(".incontrol").path
+        let recordedCliPath = try? String(
+            contentsOfFile: URL(fileURLWithPath: incontrolHome).appendingPathComponent("bin/cli-path").path,
+            encoding: .utf8
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let execURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+        let repoRoot = execURL.deletingLastPathComponent().deletingLastPathComponent()
+        let repoCliPath = repoRoot.appendingPathComponent("bin/incontrol.js").path
+
+        let scriptCandidates = [
+            explicitCliPath,
+            env["INCONTROL_CLI_PATH"],
+            recordedCliPath,
+            repoCliPath,
+        ].compactMap { $0 }.filter { !$0.isEmpty }
+
+        if let cliPath = scriptCandidates.first(where: { fm.fileExists(atPath: $0) }) {
+            let cliURL = URL(fileURLWithPath: cliPath).standardizedFileURL
+            let pkgRoot = cliURL.deletingLastPathComponent().deletingLastPathComponent()
+            if fm.isExecutableFile(atPath: cliPath) && !cliPath.hasSuffix(".js") {
+                return (cliPath, ["start"], pkgRoot)
+            }
+            let pathDirs = (env["PATH"] ?? "").split(separator: ":").map { String($0) }
+            var nodeCandidates = pathDirs.map { URL(fileURLWithPath: $0).appendingPathComponent("node").path }
+            nodeCandidates.append(contentsOf: ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"])
+            if let nodeBin = nodeCandidates.first(where: { fm.isExecutableFile(atPath: $0) }) {
+                return (nodeBin, [cliPath, "start"], pkgRoot)
+            }
+        }
+
+        let binCandidates = [
+            "/opt/homebrew/bin/incontrol",
+            "/usr/local/bin/incontrol",
+            fm.homeDirectoryForCurrentUser.appendingPathComponent(".npm-global/bin/incontrol").path,
+        ]
+        if let globalBin = binCandidates.first(where: { fm.isExecutableFile(atPath: $0) }) {
+            return (globalBin, ["start"], fm.homeDirectoryForCurrentUser)
+        }
+        return nil
+    }
+
     func ensureHubRunning() {
         guard Date().timeIntervalSince(lastHubSpawnAttempt) > 8 else { return }
         lastHubSpawnAttempt = Date()
 
-        let execURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
-        let repoRoot = execURL.deletingLastPathComponent().deletingLastPathComponent()
-        let cliPath = repoRoot.appendingPathComponent("bin/incontrol.js").path
-        guard FileManager.default.fileExists(atPath: cliPath) else { return }
-
-        let nodeCandidates = ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"]
-        guard let nodeBin = nodeCandidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
-            return
-        }
+        guard let target = resolveHubLaunchTarget() else { return }
 
         let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: nodeBin)
-        proc.arguments = [cliPath, "start"]
-        proc.currentDirectoryURL = repoRoot
+        proc.executableURL = URL(fileURLWithPath: target.executable)
+        proc.arguments = target.arguments
+        proc.currentDirectoryURL = target.cwd
         proc.standardOutput = FileHandle.nullDevice
         proc.standardError = FileHandle.nullDevice
         try? proc.run()
@@ -584,8 +623,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     }
 }
 
-let urlArg = CommandLine.arguments.dropFirst().first ?? "http://localhost:4747"
+var urlArg = "http://localhost:4747"
+var cliPathArg: String? = nil
+let rawArgs = Array(CommandLine.arguments.dropFirst())
+var argIdx = 0
+var sawPositionalUrl = false
+while argIdx < rawArgs.count {
+    let arg = rawArgs[argIdx]
+    if arg == "--cli-path", argIdx + 1 < rawArgs.count {
+        cliPathArg = rawArgs[argIdx + 1]
+        argIdx += 2
+    } else if arg.hasPrefix("--cli-path=") {
+        cliPathArg = String(arg.dropFirst("--cli-path=".count))
+        argIdx += 1
+    } else if !arg.hasPrefix("-"), !sawPositionalUrl {
+        urlArg = arg
+        sawPositionalUrl = true
+        argIdx += 1
+    } else {
+        argIdx += 1
+    }
+}
+
 let app = NSApplication.shared
-let delegate = AppDelegate(hubURL: URL(string: urlArg)!)
+let delegate = AppDelegate(hubURL: URL(string: urlArg) ?? URL(string: "http://localhost:4747")!, cliPath: cliPathArg)
 app.delegate = delegate
 app.run()

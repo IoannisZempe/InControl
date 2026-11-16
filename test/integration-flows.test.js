@@ -687,3 +687,102 @@ test('flow: MCP incontrol_ask_human correlates with active agy card and panel re
     await hub.close();
   }
 });
+
+test('flow: ChatGPT/Codex generic-CWD MCP incontrol_ask_human correlates with active codex card and resolves live', async () => {
+  const hub = await createInControlHub({
+    port: 4824,
+    macNotifications: false,
+    token: 'flow-codex-mcp-tok',
+    autoWatch: false,
+  });
+  const base = 'http://127.0.0.1:4824';
+
+  await fetch(`${base}/api/agents/event`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: 'codex-gymw',
+      name: 'ChatGPT / Codex',
+      provider: 'codex',
+      ide: 'ChatGPT App',
+      workspace: ROOT,
+      status: 'working',
+      currentTask: 'Build scraper',
+      currentStep: 'Designing connectors',
+    }),
+  });
+
+  const mcpChild = spawn(process.execPath, [BIN_PATH, 'mcp', '--ide', 'ChatGPT App', '--provider', 'codex'], {
+    cwd: os.homedir(),
+    env: {
+      ...process.env,
+      INCONTROL_URL: base,
+      INCONTROL_DISABLE_HOME_SCAN: '1',
+    },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+
+  const rl = readline.createInterface({ input: mcpChild.stdout });
+  const pendingRpc = new Map();
+  rl.on('line', (line) => {
+    try {
+      const msg = JSON.parse(line);
+      if (msg.id !== undefined && pendingRpc.has(msg.id)) {
+        pendingRpc.get(msg.id)(msg);
+        pendingRpc.delete(msg.id);
+      }
+    } catch {}
+  });
+
+  let rpcId = 1;
+  const callRpc = (method, params = {}) =>
+    new Promise((resolve, reject) => {
+      const id = rpcId++;
+      const timer = setTimeout(() => reject(new Error(`RPC timeout: ${method}`)), 5000);
+      pendingRpc.set(id, (msg) => {
+        clearTimeout(timer);
+        resolve(msg);
+      });
+      mcpChild.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+    });
+
+  try {
+    await callRpc('initialize', { protocolVersion: '2024-11-05', capabilities: {} });
+    const stateAfterInit = await (await fetch(`${base}/api/state`)).json();
+    assert.equal(stateAfterInit.agents.length, 1, 'Codex MCP init from generic cwd must not spawn ghost card');
+
+    const askRpcPromise = callRpc('tools/call', {
+      name: 'incontrol_ask_human',
+      arguments: {
+        question: 'Approve option 1 or do both 1+2?',
+        options: ['Option 1', 'Both 1+2'],
+      },
+    });
+
+    let waiting = null;
+    for (let i = 0; i < 30; i += 1) {
+      const st = await (await fetch(`${base}/api/state`)).json();
+      waiting = st.agents.find((a) => a.id === 'codex-gymw' && a.status === 'needs_input');
+      if (waiting) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    assert.ok(waiting, 'incontrol_ask_human must promote active codex-gymw card into needs_input');
+
+    const respondRes = await (
+      await fetch(`${base}/api/agents/codex-gymw/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reply', text: 'Both 1+2', sourceDevice: 'Mac Panel' }),
+      })
+    ).json();
+    assert.equal(respondRes.deliveredLive, true);
+    assert.equal(respondRes.agent.queuedMessages.length, 0);
+
+    const askResult = await askRpcPromise;
+    assert.match(askResult.result.content[0].text, /reply="Both 1\+2"/);
+  } finally {
+    rl.close();
+    mcpChild.kill();
+    await hub.close();
+  }
+});

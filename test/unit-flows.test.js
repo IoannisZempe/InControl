@@ -276,3 +276,140 @@ test('unit: executeCustomFunction enforces shell allowlist & SSRF webhook guards
     else process.env.INCONTROL_HOME = prevHome;
   }
 });
+
+test('unit: ChatGPT/Codex watcher detects option approvals, resets completed steps on new turn, and queues with --resume', async () => {
+  const { EventEmitter } = await import('node:events');
+  const {
+    detectActionRequest,
+    queueCodexThreadMessage,
+    resolveCodexBin,
+  } = await import('../src/connectors/auto-watcher.js');
+
+  // 1. Real ChatGPT numbered option + "Approve option 1..." prompt must trigger needs_input with quick buttons
+  const msg = [
+    'I see three approaches:',
+    '',
+    '1. **Compliance-first connector platform — recommended.** Separate repo and service; official APIs where available.',
+    '2. **Full browser scraping.** Wider coverage initially, but fragile.',
+    '3. **Manual research assistant.** Users paste listings.',
+    '',
+    'I recommend option 1, with a server-side email entitlement. Approve option 1 and I’ll write the design, create the standalone repo, and begin test-first implementation.',
+  ].join('\n');
+
+  const req = detectActionRequest(msg, false, 'ChatGPT App');
+  assert.ok(req, 'Option approval prompt must be detected for ChatGPT App');
+  assert.equal(req.options[0].label, 'Option 1: Compliance-first…');
+  assert.equal(req.options[0].replyText, 'Approve option 1');
+  assert.equal(req.options[1].replyText, 'Option 2');
+  assert.equal(req.options[2].replyText, 'Option 3');
+
+  // 2. Binary preference: ChatGPT App prefers Desktop bundled codex before ~/.local/bin/codex
+  const desktopBin = '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex';
+  const resolvedDesktop = resolveCodexBin('ChatGPT App', (p) => p === desktopBin || p.endsWith('/.local/bin/codex'));
+  assert.equal(resolvedDesktop, desktopBin);
+
+  // 3. queueCodexThreadMessage passes --resume, falls back without --resume on older CLI, and marks needs_attention on failure
+  const store = new AgentStore();
+  store.upsertAgent({ id: 'codex-test', name: 'ChatGPT / Codex', provider: 'codex', ide: 'ChatGPT App', status: 'needs_attention' });
+
+  const calls = [];
+  const makeFakeChild = ({ code = 0, stderrText = '' }) => {
+    const child = new EventEmitter();
+    child.stderr = new EventEmitter();
+    queueMicrotask(() => {
+      if (stderrText) child.stderr.emit('data', Buffer.from(stderrText));
+      child.emit('close', code);
+    });
+    return child;
+  };
+
+  queueCodexThreadMessage('thread-uuid-1', 'Option 1', process.cwd(), store, 'codex-test', 'ChatGPT App', {
+    binOverride: '/tmp/fake-codex-old',
+    spawnFn: (bin, args) => {
+      calls.push({ bin, args });
+      if (args.includes('--resume')) {
+        return makeFakeChild({ code: 2, stderrText: "error: unexpected argument '--resume' found" });
+      }
+      return makeFakeChild({ code: 0 });
+    },
+  });
+
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].args.includes('--resume'), true);
+  assert.equal(calls[1].args.includes('--resume'), false);
+  assert.equal(store.agents.get('codex-test').status, 'working');
+  assert.match(store.agents.get('codex-test').currentStep, /Sent to ChatGPT App/);
+
+  // 4. Isolated HOME watcher test: trailing token_count does not flip completed turn to working;
+  // new task_started clears Turn completed; active MCP needs_input is preserved.
+  const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'incontrol-unit-codex-'));
+  const dayDir = path.join(fakeHome, '.codex', 'sessions', '2026', '11', '16');
+  fs.mkdirSync(dayDir, { recursive: true });
+  const rollout = path.join(dayDir, 'rollout-2026-11-16T16-00-00-11111111-2222-3333-4444-555555555555.jsonl');
+  const workspaceDir = path.join(fakeHome, 'Repo', 'GymW');
+  fs.mkdirSync(workspaceDir, { recursive: true });
+
+  const isoScript = `
+    import assert from 'node:assert/strict';
+    import fs from 'node:fs';
+    import { AgentStore } from './src/server/store.js';
+    import { scanCodexAndChatGptSessions, inspectAgentDelivery } from './src/connectors/auto-watcher.js';
+
+    const store = new AgentStore();
+    const seen = new Map();
+    const dismissed = new Set();
+    const rollout = ${JSON.stringify(rollout)};
+    const workspaceDir = ${JSON.stringify(workspaceDir)};
+    const tid = '11111111-2222-3333-4444-555555555555';
+
+    // Phase A: task_complete with approval prompt + trailing token_count
+    fs.writeFileSync(rollout, [
+      JSON.stringify({ type: 'session_meta', payload: { id: tid, session_id: tid, cwd: workspaceDir, originator: 'Codex Desktop' } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Build tracker' }] } }),
+      JSON.stringify({ type: 'event_msg', ordinal: 1, payload: { type: 'task_complete', turn_id: 't1', last_agent_message: ${JSON.stringify(msg)} } }),
+      JSON.stringify({ type: 'event_msg', ordinal: 2, payload: { type: 'token_count' } }),
+    ].join('\\n') + '\\n');
+
+    scanCodexAndChatGptSessions(store, seen, dismissed);
+    const a1 = store.agents.get('codex-gymw');
+    assert.equal(a1.status, 'needs_input');
+    assert.equal(a1.metadata.threadId, tid);
+    assert.equal(inspectAgentDelivery(store, a1).ready, true);
+
+    // Phase B: finished normal turn + trailing token_count -> stays needs_attention, never working+Turn completed
+    fs.writeFileSync(rollout, [
+      JSON.stringify({ type: 'session_meta', payload: { id: tid, session_id: tid, cwd: workspaceDir, originator: 'Codex Desktop' } }),
+      JSON.stringify({ type: 'event_msg', ordinal: 3, payload: { type: 'task_complete', turn_id: 't2', last_agent_message: 'All tests passed cleanly.' } }),
+      JSON.stringify({ type: 'event_msg', ordinal: 4, payload: { type: 'token_count' } }),
+    ].join('\\n') + '\\n');
+    const t2 = new Date(Date.now() + 2000);
+    fs.utimesSync(rollout, t2, t2);
+    scanCodexAndChatGptSessions(store, seen, dismissed);
+    const a2 = store.agents.get('codex-gymw');
+    assert.equal(a2.status, 'needs_attention');
+    assert.equal(a2.currentStep, 'Turn completed');
+
+    // Phase C: new turn started -> resets Turn completed to Thinking...
+    fs.appendFileSync(rollout, [
+      JSON.stringify({ type: 'event_msg', ordinal: 5, payload: { type: 'task_started' } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Lets do both 1+2' }] } }),
+    ].join('\\n') + '\\n');
+    const t3 = new Date(Date.now() + 4000);
+    fs.utimesSync(rollout, t3, t3);
+    scanCodexAndChatGptSessions(store, seen, dismissed);
+    const a3 = store.agents.get('codex-gymw');
+    assert.equal(a3.status, 'working');
+    assert.equal(a3.currentStep, 'Thinking…');
+    assert.equal(a3.attentionReason, null);
+  `;
+
+  try {
+    await execFileAsync(process.execPath, ['--input-type=module', '-e', isoScript], {
+      cwd: ROOT,
+      env: { ...process.env, HOME: fakeHome, INCONTROL_HOME: path.join(fakeHome, '.incontrol') },
+    });
+  } finally {
+    fs.rmSync(fakeHome, { recursive: true, force: true });
+  }
+});

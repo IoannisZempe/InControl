@@ -40,7 +40,15 @@ export function runMcpServer(args = []) {
           ? agents.find((a) => a.workspace && a.workspace.replace(/\/+$/, '') === normWs && a.provider === provider) ||
             agents.find((a) => a.workspace && a.workspace.replace(/\/+$/, '') === normWs)
           : null;
-        const matched = byWs || (provider === 'antigravity' ? agents.find((a) => a.id.startsWith('agy-')) : null);
+        const matched =
+          byWs ||
+          (provider === 'antigravity'
+            ? agents.find((a) => a.id.startsWith('agy-') && a.status === 'working') ||
+              agents.find((a) => a.id.startsWith('agy-'))
+            : provider === 'codex'
+              ? agents.find((a) => a.provider === 'codex' && a.status === 'working') ||
+                agents.find((a) => a.provider === 'codex')
+              : null);
         if (matched) {
           return {
             id: matched.id,
@@ -82,9 +90,9 @@ export function runMcpServer(args = []) {
 
     try {
       if (method === 'initialize') {
-        // Avoid creating redundant "workspace / Standing by" cards for Antigravity when generic CWD is used;
-        // Antigravity sessions are already tracked live via hooks & watcher and matched on tool call.
-        if (!(provider === 'antigravity' && isGenericCwd)) {
+        // Avoid creating redundant "workspace / Standing by" cards for Antigravity/Codex when generic CWD is used;
+        // sessions are already tracked live via hooks & watcher and matched on tool call.
+        if (!((provider === 'antigravity' || provider === 'codex') && isGenericCwd)) {
           fetch(`${hubUrl}/api/agents/event`, {
             method: 'POST',
             headers: hubHeaders(),

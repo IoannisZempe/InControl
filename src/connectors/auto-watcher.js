@@ -2,12 +2,11 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { getClaudeSettingsSnippet } from './claude-hook.js';
 import { getAgyHooksConfig } from './agy-hook.js';
+import { getCliEntryPath, resolvePersistentInvocation } from '../server/runtime-paths.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const BIN_PATH = path.resolve(__dirname, '../../bin/incontrol.js');
+const BIN_PATH = getCliEntryPath();
 
 const HOME = os.homedir();
 const AGY_BRAIN_DIR = path.join(HOME, '.gemini', 'antigravity', 'brain');
@@ -260,7 +259,7 @@ export function scanAntigravitySessions(store, seenMtimes = new Map(), dismissed
  * Watches ~/.codex/session_index.jsonl and ~/.codex/sessions/YYYY/MM/DD/*.jsonl
  * Automatically tracks both OpenAI Codex CLI and the ChatGPT Desktop App (Codex Desktop).
  */
-function scanCodexAndChatGptSessions(store, seenMtimes, dismissedPrompts = new Set()) {
+export function scanCodexAndChatGptSessions(store, seenMtimes = new Map(), dismissedPrompts = new Set()) {
   if (!fs.existsSync(CODEX_SESSIONS_DIR)) return;
 
   // Map thread_id -> thread_name from session_index.jsonl
@@ -397,11 +396,15 @@ function scanCodexAndChatGptSessions(store, seenMtimes, dismissedPrompts = new S
                 if (cleaned) {
                   latestUserPrompt = cleaned.slice(0, 110);
                 }
+                st = ageMs < 10 * 60_000 ? 'working' : 'idle';
+                step = st === 'working' ? 'Thinking…' : 'Idle';
+                reason = null;
                 turnHadHandoff = false;
                 prompt = null;
               }
             } else if (p.type === 'custom_tool_call' || p.type === 'function_call') {
               st = 'working';
+              reason = null;
               const toolName = p.name || 'tool';
               const rawInput =
                 typeof p.input === 'string' ? p.input : JSON.stringify(p.input || p.arguments || '');
@@ -414,14 +417,18 @@ function scanCodexAndChatGptSessions(store, seenMtimes, dismissedPrompts = new S
               prompt = null;
             } else if (p.type === 'reasoning') {
               st = 'working';
+              reason = null;
               const summaryText =
                 Array.isArray(p.summary) && p.summary[0]?.text
                   ? p.summary[0].text.replace(/\*\*/g, '').trim()
                   : null;
               if (summaryText) step = summaryText;
+              else if (step === 'Turn completed' || step === 'Idle') step = 'Thinking…';
               prompt = null;
             } else if (p.type === 'custom_tool_call_output' || p.type === 'function_call_output') {
               st = 'working';
+              reason = null;
+              if (step === 'Turn completed' || step === 'Idle') step = 'Working…';
             }
           } else if (ev.type === 'event_msg') {
             if (
@@ -486,9 +493,7 @@ function scanCodexAndChatGptSessions(store, seenMtimes, dismissedPrompts = new S
             } else if (
               p.type === 'task_started' ||
               p.type === 'exec_command_begin' ||
-              p.type === 'agent_reasoning' ||
-              p.type === 'item_completed' ||
-              p.type === 'token_count'
+              p.type === 'agent_reasoning'
             ) {
               if (p.type === 'task_started') {
                 turnHadHandoff = false;
@@ -496,8 +501,21 @@ function scanCodexAndChatGptSessions(store, seenMtimes, dismissedPrompts = new S
               }
               if (ageMs < 10 * 60_000) {
                 st = 'working';
+                reason = null;
                 if (p.command) {
                   step = `Running: ${Array.isArray(p.command) ? p.command.join(' ') : p.command}`;
+                } else if (p.type === 'task_started' || step === 'Turn completed' || step === 'Idle') {
+                  step = 'Thinking…';
+                }
+                prompt = null;
+              }
+            } else if (p.type === 'item_completed' || p.type === 'token_count') {
+              // Trailing metadata after task_complete must not flip a completed turn back to working
+              if (st !== 'needs_attention' && st !== 'needs_input' && ageMs < 10 * 60_000) {
+                st = 'working';
+                reason = null;
+                if (step === 'Turn completed' || step === 'Idle') {
+                  step = 'Working…';
                 }
                 prompt = null;
               }
@@ -516,6 +534,19 @@ function scanCodexAndChatGptSessions(store, seenMtimes, dismissedPrompts = new S
       }
     }
 
+    const hasActiveMcpPrompt =
+      existing?.status === 'needs_input' &&
+      existing?.pendingPrompt &&
+      !String(existing.pendingPrompt.requestId || '').startsWith('codex_');
+    if (hasActiveMcpPrompt) {
+      best = {
+        status: existing.status,
+        currentStep: existing.currentStep,
+        attentionReason: existing.attentionReason,
+        pendingPrompt: existing.pendingPrompt,
+      };
+    }
+
     store.upsertAgent({
       id: agentId,
       name: agentName,
@@ -529,6 +560,10 @@ function scanCodexAndChatGptSessions(store, seenMtimes, dismissedPrompts = new S
       currentStep: best.currentStep,
       attentionReason: best.attentionReason,
       pendingPrompt: best.pendingPrompt,
+      metadata: {
+        threadId: primaryThreadId,
+        sessionFile: primary.file.path,
+      },
       updatedAt: maxMtime,
     });
 
@@ -537,16 +572,25 @@ function scanCodexAndChatGptSessions(store, seenMtimes, dismissedPrompts = new S
         if (requestId) {
           dismissedPrompts.add(requestId);
         }
-        if ((action === 'reply' || action === 'steer') && text?.trim()) {
-          queueCodexThreadMessage(primaryThreadId, text.trim(), cwd, store, agentId);
+        if (action === 'dismiss' || action === 'acknowledge') return;
+        let msgText = text?.trim() || '';
+        if (!msgText && (action === 'approve' || action === 'yes')) {
+          msgText = 'Approved, please proceed.';
+        }
+        if (msgText) {
+          queueCodexThreadMessage(primaryThreadId, msgText, cwd, store, agentId, ideName);
         }
       });
     }
   }
 
-  // Remove any legacy duplicate codex-* entries that aren't in activeIds
-  for (const existingId of store.agents.keys()) {
-    if (existingId.startsWith('codex-') && !activeIds.has(existingId)) {
+  // Remove any legacy duplicate codex-* entries that aren't in activeIds (unless blocked on MCP needs_input)
+  for (const [existingId, existingAgent] of store.agents.entries()) {
+    if (
+      existingId.startsWith('codex-') &&
+      !activeIds.has(existingId) &&
+      existingAgent?.status !== 'needs_input'
+    ) {
       store.removeAgent(existingId);
     }
   }
@@ -656,9 +700,10 @@ function stripLegacyIncontrolHooks() {
 }
 
 export function installIntegration(targetId) {
+  const inv = resolvePersistentInvocation(BIN_PATH);
+
   if (targetId === 'antigravity') {
-    const agyBin = `"${process.execPath}" "${BIN_PATH}"`;
-    const agyHooks = getAgyHooksConfig(agyBin);
+    const agyHooks = getAgyHooksConfig(inv.shellCommand);
     const pluginManifest = {
       name: 'incontrol',
       displayName: 'InControl',
@@ -670,8 +715,8 @@ export function installIntegration(targetId) {
     const pluginMcp = {
       mcpServers: {
         incontrol: {
-          command: process.execPath,
-          args: [BIN_PATH, 'mcp'],
+          command: inv.command,
+          args: [...inv.args, 'mcp'],
         },
       },
     };
@@ -699,7 +744,8 @@ When a user prompt or turn includes \`[From InControl\` (steered from the Mac Si
     fs.mkdirSync(CODEX_DIR, { recursive: true });
     let toml = fs.existsSync(CODEX_CONFIG_TOML) ? fs.readFileSync(CODEX_CONFIG_TOML, 'utf8') : '';
     if (!toml.includes('[mcp_servers.incontrol]')) {
-      const block = `\n[mcp_servers.incontrol]\ncommand = "node"\nargs = ["${BIN_PATH}", "mcp", "--ide", "ChatGPT App", "--provider", "codex"]\n`;
+      const mcpArgs = [...inv.args, 'mcp', '--ide', 'ChatGPT App', '--provider', 'codex'];
+      const block = `\n[mcp_servers.incontrol]\ncommand = ${JSON.stringify(inv.command)}\nargs = ${JSON.stringify(mcpArgs)}\n`;
       toml = toml.trimEnd() + '\n' + block;
       fs.writeFileSync(CODEX_CONFIG_TOML, toml, 'utf8');
     }
@@ -707,11 +753,12 @@ When a user prompt or turn includes \`[From InControl\` (steered from the Mac Si
   }
 
   if (targetId === 'claude') {
-    const snippet = getClaudeSettingsSnippet(`node ${BIN_PATH}`);
+    const snippet = getClaudeSettingsSnippet(inv.shellCommand);
     let settings = {};
     if (fs.existsSync(CLAUDE_SETTINGS)) {
       try {
         settings = JSON.parse(fs.readFileSync(CLAUDE_SETTINGS, 'utf8'));
+        fs.copyFileSync(CLAUDE_SETTINGS, `${CLAUDE_SETTINGS}.incontrol-backup`);
       } catch {}
     }
     settings.hooks = settings.hooks || {};
@@ -735,6 +782,7 @@ When a user prompt or turn includes \`[From InControl\` (steered from the Mac Si
 }
 
 function upsertJsonMcpConfig(filePath, ideName) {
+  const inv = resolvePersistentInvocation(BIN_PATH);
   let cfg = {};
   if (fs.existsSync(filePath)) {
     try {
@@ -743,8 +791,8 @@ function upsertJsonMcpConfig(filePath, ideName) {
   }
   cfg.mcpServers = cfg.mcpServers || {};
   cfg.mcpServers.incontrol = {
-    command: 'node',
-    args: [BIN_PATH, 'mcp', '--ide', ideName, '--provider', ideName.toLowerCase()],
+    command: inv.command,
+    args: [...inv.args, 'mcp', '--ide', ideName, '--provider', ideName.toLowerCase()],
   };
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(cfg, null, 2));
@@ -787,6 +835,25 @@ function readTailLines(filePath, maxLines = 60) {
   }
 }
 
+function extractNumberedOptions(boundedMsg) {
+  const opts = [];
+  const re = /^\s*(\d+)\.\s+(?:\*\*([^*\n]{2,64}?)(?:\s+[—–-]\s*[^*\n]*)?\*\*|([^\n]{2,52}?)(?:\s+[—–-]|[:.]|\s*$))/gm;
+  let m;
+  while ((m = re.exec(boundedMsg)) !== null) {
+    const num = m[1];
+    const rawTitle = (m[2] || m[3] || '').replace(/[—–.:]+$/, '').trim();
+    if (!rawTitle || opts.some((o) => o.num === num)) continue;
+    opts.push({ num, label: rawTitle });
+  }
+  return opts.length >= 2 && opts.length <= 5 ? opts : [];
+}
+
+function trimOptionButtonLabel(num, title) {
+  const clean = String(title || '').replace(/\s+/g, ' ').trim();
+  const short = clean.length > 18 ? `${clean.slice(0, 17).trimEnd()}…` : clean;
+  return short ? `Option ${num}: ${short}` : `Option ${num}`;
+}
+
 /**
  * Detects when an agent turn (Codex, ChatGPT Desktop, or Antigravity) ends with a message
  * asking the user to confirm an action, complete a browser sign-in/handoff, or reply with a phrase.
@@ -808,16 +875,15 @@ export function detectActionRequest(rawMsg, turnHadHandoff = false, ideName = 'C
 
   if (paragraphs.length === 0) return null;
 
+  const promptCueRe =
+    /\b(?:confirm|say|reply|respond|tell me|sign in|log in|approve|authorize|should i|would you|do you|choose|pick|select|which option|let me know|\?)/i;
+
   // Pick the paragraph that contains the actual action request (usually the last or second-to-last paragraph)
   let actionIdx = paragraphs.length - 1;
   if (
     paragraphs.length > 1 &&
-    !/\b(?:confirm|say|reply|respond|tell me|sign in|log in|approve|authorize|should i|would you|do you|\?)/i.test(
-      paragraphs[actionIdx]
-    ) &&
-    /\b(?:confirm|say|reply|respond|tell me|sign in|log in|approve|authorize|should i|would you|do you|\?)/i.test(
-      paragraphs[actionIdx - 1]
-    )
+    !promptCueRe.test(paragraphs[actionIdx]) &&
+    promptCueRe.test(paragraphs[actionIdx - 1])
   ) {
     actionIdx = actionIdx - 1;
   }
@@ -854,23 +920,60 @@ export function detectActionRequest(rawMsg, turnHadHandoff = false, ideName = 'C
     };
   }
 
-  // 2. Explicit confirmation prompt: e.g. "Confirm that you want me to click Authorize campaign builder now."
+  // 2. Explicit confirmation or option-approval prompt:
+  // e.g. "Confirm that you want me to...", "Approve option 1 and I'll write the design...", "Pick an option"
   if (
-    /\b(?:confirm that|confirm whether|please confirm|confirm before|want me to|should i|would you like me to|do you want me to|shall i|approve launch|click authorize)\b/i.test(
+    /\b(?:confirm that|confirm whether|please confirm|confirm before|want me to|should i|would you like me to|do you want me to|shall i|approve\s+(?:launch|option|approach|plan|step|this|that)\b|approve\s+[^.\n]{1,36}\band\s+i['’]?ll\b|click authorize|choose\s+(?:an?\s+)?(?:option|approach)|pick\s+(?:an?\s+)?(?:option|approach)|select\s+(?:an?\s+)?(?:option|approach)|let me know which|which\s+(?:option|approach)\b)/i.test(
       tailText
     )
   ) {
-    return {
-      step: `Waiting for your confirmation in ${ideName}`,
-      question: questionPara,
-      details: prevParas,
-      options: [
+    const numbered = extractNumberedOptions(boundedMsg);
+    const preferredMatch = tailText.match(/\b(?:approve|recommend|prefer|pick|choose)\s+option\s+(\d+)\b/i)
+      || tailText.match(/\boption\s+(\d+)\b/i);
+    const preferredNum = preferredMatch ? preferredMatch[1] : null;
+
+    let actionButtons;
+    if (numbered.length >= 2) {
+      const ordered = preferredNum
+        ? [
+            ...numbered.filter((o) => o.num === preferredNum),
+            ...numbered.filter((o) => o.num !== preferredNum),
+          ]
+        : numbered;
+      actionButtons = ordered.slice(0, 3).map((o, idx) => ({
+        id: 'quick_reply',
+        label: trimOptionButtonLabel(o.num, o.label),
+        style: idx === 0 ? 'primary' : 'secondary',
+        replyText: preferredMatch && o.num === preferredNum
+          ? `Approve option ${o.num}`
+          : `Option ${o.num}`,
+      }));
+    } else if (preferredNum) {
+      actionButtons = [
+        {
+          id: 'quick_reply',
+          label: `Approve Option ${preferredNum}`,
+          style: 'primary',
+          replyText: `Approve option ${preferredNum}`,
+        },
+      ];
+    } else {
+      actionButtons = [
         {
           id: 'quick_reply',
           label: 'Confirm & Proceed',
           style: 'primary',
           replyText: 'Confirmed, please proceed.',
         },
+      ];
+    }
+
+    return {
+      step: `Waiting for your confirmation in ${ideName}`,
+      question: questionPara,
+      details: prevParas,
+      options: [
+        ...actionButtons,
         { id: 'focus_and_dismiss', label: `Open ${ideName}`, style: 'secondary' },
         { id: 'dismiss', label: 'Dismiss', style: 'secondary' },
       ],
@@ -944,15 +1047,21 @@ function findRecentJsonlFiles(dir, limit = 4) {
   return results.slice(0, limit);
 }
 
-function resolveCodexBin() {
-  const candidates = [
+const codexBinsWithoutResume = new Set();
+
+export function resolveCodexBin(ideName = 'ChatGPT App', exists = fs.existsSync) {
+  const desktopBundled = '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex';
+  const standaloneCandidates = [
     path.join(HOME, '.local', 'bin', 'codex'),
-    '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex',
     '/opt/homebrew/bin/codex',
     '/usr/local/bin/codex',
   ];
+  const candidates =
+    ideName === 'ChatGPT App'
+      ? [desktopBundled, ...standaloneCandidates]
+      : [...standaloneCandidates, desktopBundled];
   for (const bin of candidates) {
-    if (fs.existsSync(bin)) return bin;
+    if (exists(bin)) return bin;
   }
   return 'codex';
 }
@@ -1045,14 +1154,27 @@ export function inspectAgentDelivery(store, agent, respondResult = null) {
   return { ready: true, mode: 'queue' };
 }
 
-function queueCodexThreadMessage(threadId, text, cwd, store, agentId) {
-  const bin = resolveCodexBin();
-  const child = spawn(bin, ['queue', '--thread', threadId, '--message', text], {
+export function queueCodexThreadMessage(
+  threadId,
+  text,
+  cwd,
+  store,
+  agentId,
+  ideName = 'ChatGPT App',
+  { spawnFn = spawn, binOverride = null, useResume = true } = {}
+) {
+  const bin = binOverride || resolveCodexBin(ideName);
+  const resumeFlag = useResume && !codexBinsWithoutResume.has(bin);
+  const queueArgs = resumeFlag
+    ? ['queue', '--resume', '--thread', threadId, '--message', text]
+    : ['queue', '--thread', threadId, '--message', text];
+
+  const child = spawnFn(bin, queueArgs, {
     cwd: fs.existsSync(cwd) ? cwd : HOME,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let stderr = '';
-  child.stderr.on('data', (d) => {
+  child.stderr?.on('data', (d) => {
     stderr += d.toString();
   });
   child.on('error', (err) => {
@@ -1063,14 +1185,34 @@ function queueCodexThreadMessage(threadId, text, cwd, store, agentId) {
       message: `[InControl] Failed to run "${bin} queue": ${err.message}`,
       timestamp: Date.now(),
     });
+    agent.queuedMessages.push({
+      id: `msg_${Date.now().toString(36)}`,
+      action: 'reply',
+      text,
+      sourceDevice: 'Panel',
+      timestamp: Date.now(),
+    });
+    agent.status = 'needs_attention';
     agent.currentStep = `Queued for MCP inbox (CLI unavailable): "${text.slice(0, 48)}"`;
     store.emit('change', { type: 'agent_updated', agent: store.serializeAgent(agent) });
   });
   child.on('close', (code) => {
+    if (code !== 0 && resumeFlag && /unexpected argument ['"`]?--resume/i.test(stderr)) {
+      codexBinsWithoutResume.add(bin);
+      queueCodexThreadMessage(threadId, text, cwd, store, agentId, ideName, {
+        spawnFn,
+        binOverride: bin,
+        useResume: false,
+      });
+      return;
+    }
+
     const agent = store.agents.get(agentId);
     if (!agent) return;
     if (code === 0) {
-      agent.currentStep = `Queued in ChatGPT/Codex: "${text.slice(0, 48)}"`;
+      agent.status = 'working';
+      agent.currentStep = `Sent to ${ideName}: "${text.slice(0, 48)}"`;
+      agent.attentionReason = null;
     } else {
       const detail = stderr.trim().split('\n').pop() || `exit ${code}`;
       store._appendLog(agent, {
@@ -1078,7 +1220,16 @@ function queueCodexThreadMessage(threadId, text, cwd, store, agentId) {
         message: `[InControl] codex queue exited (${detail}); left in MCP inbox`,
         timestamp: Date.now(),
       });
+      agent.queuedMessages.push({
+        id: `msg_${Date.now().toString(36)}`,
+        action: 'reply',
+        text,
+        sourceDevice: 'Panel',
+        timestamp: Date.now(),
+      });
+      agent.status = 'needs_attention';
       agent.currentStep = `Queued for MCP inbox: "${text.slice(0, 48)}"`;
+      agent.attentionReason = `codex queue failed (${detail.slice(0, 64)}); left in MCP inbox.`;
     }
     store.emit('change', { type: 'agent_updated', agent: store.serializeAgent(agent) });
   });

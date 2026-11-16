@@ -23,6 +23,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm audit --audit-level=high
       - run: npm test
+      - run: npm run pack:check
 
   macos-panel:
     runs-on: macos-latest
