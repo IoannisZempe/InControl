@@ -1,65 +1,90 @@
 <p align="center">
-  <img src="docs/hero-aie.svg" alt="TheOne — One Panel to Rule All Your AI Coding Agents" width="100%" />
+  <img src="public/icon.svg" alt="TheOne" width="72" height="72" />
+</p>
+
+<h1 align="center">TheOne</h1>
+
+<p align="center">
+  <strong>Local-first mission control for AI coding agents.</strong><br/>
+  Triage every Claude Code, Codex, Antigravity, and Cursor session in one live panel.<br/>
+  Walk away from your desk while an agent runs a migration, get a WhatsApp or phone ping when <code>--gate-bash</code> pauses a risky shell command, and tap <strong>Approve</strong> from your phone so it keeps shipping.
 </p>
 
 <p align="center">
   <a href="https://github.com/IoannisZempe/InControl/actions/workflows/ci.yml"><img src="https://github.com/IoannisZempe/InControl/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-FSL--1.1--MIT-e8c468?style=flat&labelColor=0c0c0f" alt="License: FSL-1.1-MIT" /></a>
   <img src="https://img.shields.io/badge/Runtime-Local--First-22c55e?style=flat&labelColor=0c0c0f" alt="Local-First" />
+  <img src="https://img.shields.io/badge/Platforms-macOS%20%7C%20Linux%20%7C%20WSL-f5f5f7?style=flat&labelColor=0c0c0f" alt="Platforms: macOS | Linux | WSL" />
   <img src="https://img.shields.io/badge/Node-%3E%3D20-f5f5f7?style=flat&labelColor=0c0c0f" alt="Node >=20" />
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-Welcome-e8c468?style=flat&labelColor=0c0c0f" alt="PRs Welcome" /></a>
   <a href="https://x.com/ioanniszempe"><img src="https://img.shields.io/badge/X-@ioanniszempe-f5f5f7?style=flat&labelColor=0c0c0f&logo=x" alt="X @ioanniszempe" /></a>
 </p>
 
 <p align="center">
-  <strong>TheOne — One panel to rule them all.</strong><br/>
-  See who needs your input, who finished for review, and who is still shipping — across IDEs, terminals, your phone, and WhatsApp.
+  <img src="docs/demo.gif" alt="TheOne 15s Demo — Agent blocks on Bash -> Card jumps to Needs Input -> Approved from phone -> Agent resumes" width="820" />
 </p>
+
+## 30-Second Quick Start
+
+**1. Start the Local Hub + Web & Phone UI (`macOS`, `Linux`, `WSL` — Node >= 20):**
+
+```bash
+npx incontrol-agents start
+```
+
+**2. Optional Native macOS Floating Side Panel (`macOS` only — requires Xcode CLT):**
+
+```bash
+npx incontrol-agents start --panel   # Compiles & docks the native macOS side panel
+npx incontrol-agents service install # Optional: auto-start Hub + macOS panel at login
+```
+
+Open `http://localhost:4747` on your machine, or scan the terminal QR code to control sessions from your phone over LAN or Tailscale.
+
+### Platform Scope
+
+| Surface / Capability | Platforms | Notes |
+|---|---|---|
+| **Hub (`:4747`) + Web & Phone PWA + QR Pairing** | **macOS, Linux, WSL** | Zero compiler dependencies (`Node >= 20`) |
+| **Claude Code `--gate-bash` Hooks + Stdio MCP + CLI Wrapper** | **macOS, Linux, WSL** | Works in any terminal or IDE supporting MCP/hooks |
+| **WhatsApp Escalation + Railway Daily Postgres Archive** | **macOS, Linux, WSL** | Outbound HTTPS / webhook sync with local secret redaction |
+| **Floating Liquid Glass Side Panel & 1-Click Window Focus** | **macOS Native (`--panel`)** | Compiles `macos/InControlPanel.swift` (`Cocoa` + `WebKit`) |
 
 ---
 
-## Inside TheOne
+## Why TheOne: Approve Risky Bash From Your Phone
 
-<table>
-  <tr>
-    <td width="310" valign="top" align="center">
-      <img src="docs/screenshot.png" alt="TheOne live macOS Liquid Glass Side Panel" width="290" />
-    </td>
-    <td valign="top">
-      <strong><code>// QUICK START</code></strong>
-      <pre lang="bash"># Option A: Global CLI or npx (Node &gt;= 20)
-npm install -g incontrol-agents
-incontrol start --panel          # Hub :4747 + native macOS side panel
-incontrol service install        # Optional: auto-start hub + panel at login
+Most agent dashboards are passive monitors that still force you to sit at your desk. **TheOne** is built for **asynchronous mobile steering**:
 
-# Option B: Try in one command or run from source
-npx incontrol-agents start --panel
-# or: git clone https://github.com/IoannisZempe/InControl.git &amp;&amp; cd InControl &amp;&amp; npm install &amp;&amp; npm start -- --panel</pre>
-      <sub>First macOS panel launch compiles cleanly to <code>~/.incontrol/bin/incontrol-panel</code> (requires Xcode CLT). Open <code>http://localhost:4747</code> or scan the QR code from your phone.</sub>
-      <br/><br/>
-      <strong><code>01 // ATTENTION TRIAGE ENGINE</code></strong><br/>
-      Agents are sorted automatically into four live priority lanes:<br/>
-      <code>Needs Input</code> &rarr; <code>Needs Review</code> &rarr; <code>Active</code> &rarr; <code>Idle</code>.
-      <br/><br/>
-      <strong><code>02 // ZERO-CONFIG AUTO-DISCOVERY</code></strong><br/>
-      Detects active <strong>Antigravity</strong>, <strong>ChatGPT Desktop (<code>ChatGPT.app</code>)</strong>, and <strong>OpenAI Codex</strong> sessions on macOS with zero manual wrapping.
-      <br/><br/>
-      <strong><code>03 // TWO-WAY STEERING &amp; APPROVALS</code></strong><br/>
-      Approve, deny, stop, or reply inline from Mac or phone via native lifecycle hooks (<code>Claude Code</code>, <code>Antigravity</code>), <code>codex queue --thread</code>, and stdio MCP.
-      <br/><br/>
-      <strong><code>04 // CUSTOM MACROS &amp; JUMP TO WINDOW</code></strong><br/>
-      Pin 1-click buttons (<code>Run Tests</code>, <code>Security Check</code>, custom prompts, or shell scripts) onto every card, or focus <code>Antigravity</code>, <code>ChatGPT</code>, <code>Cursor</code>, <code>VS Code</code>, <code>Ghostty</code>, <code>iTerm2</code>, or <code>Warp</code> in one click.
-      <br/><br/>
-      <strong><code>05 // PHONE QR + WHATSAPP ESCALATION</code></strong><br/>
-      Scan the QR code for LAN/Tailscale mobile access. Unanswered prompts escalate to WhatsApp (CallMeBot, Twilio, Meta Cloud API, or webhook) with a 1-tap link.
-      <br/><br/>
-      <strong><code>06 // AUTO DAILY ARCHIVE &amp; HANDOFF</code></strong><br/>
-      Checkpoints logs, Git commits, and redacted AI session digests every 15 minutes + midnight rollover into Railway PostgreSQL, portable across IDEs via MCP.
-    </td>
-  </tr>
-</table>
+1. **Gate Risky Commands (`--gate-bash`):** Enable Claude Code's native `PreToolUse` hook with `--gate-bash`:
+   ```bash
+   npx incontrol-agents setup claude-code --install --gate-bash
+   ```
+2. **Instant Priority Triage & Escalation:** When an agent tries to run a shell command (like `npx prisma migrate dev` or `terraform apply`), execution pauses and the card jumps to the top **`Needs Input`** lane. If you don't respond within your configured window (e.g. 60s), **TheOne** pings your **WhatsApp** or phone with the exact command and a 1-tap deep link.
+3. **Unblock From Anywhere:** Tap **Approve** (or **Deny** with feedback) from your phone or reply `1` / `2` on WhatsApp. The hook unblocks in milliseconds and your agent keeps shipping.
 
-To provision your private **by-day Railway PostgreSQL archive** automatically:
+---
+
+## Core Capabilities
+
+### `01 // Attention Triage Engine`
+Agents are sorted automatically into four live priority lanes so you never hunt through 12 terminal tabs:
+`Needs Input` &rarr; `Needs Review` &rarr; `Active` &rarr; `Idle`.
+
+### `02 // Two-Way Steering & Approvals`
+Approve, deny, stop, or queue follow-up instructions inline from Mac or phone via native lifecycle hooks (`Claude Code`, `Antigravity`), `codex queue --thread`, process stdin wrapping (`incontrol wrap`), and stdio MCP (`incontrol_ask_human`).
+
+### `03 // Zero-Config macOS Auto-Discovery`
+On macOS, automatically detects active **Antigravity**, **ChatGPT Desktop (`ChatGPT.app`)**, and **OpenAI Codex** sessions with zero manual wrapping.
+
+### `04 // Custom 1-Click Macros & IDE Window Focus`
+Pin custom macro buttons (`Run Tests`, `Security Check`, custom prompts, or allowlisted shell commands) onto every agent card, or jump directly to the agent's window in `Antigravity`, `ChatGPT`, `Cursor`, `VS Code`, `Ghostty`, `iTerm2`, or `Warp` in one click.
+
+### `05 // Phone QR Pairing + WhatsApp Escalation`
+Scan the terminal QR code for instant LAN or Tailscale mobile access (192-bit token exchanged for an `HttpOnly; SameSite=Strict` session cookie). Unanswered prompts escalate to WhatsApp via CallMeBot, Twilio (2-way replies), Meta Cloud API, or custom webhooks.
+
+### `06 // Auto Daily Archive & Cross-IDE Handoff`
+Checkpoints structured events, Git commits, and secret-redacted AI session digests every **15 minutes** and at **midnight rollover** into local JSONL (`~/.incontrol/history/YYYY-MM-DD.jsonl`) and your private **Railway PostgreSQL** archive — portable across IDEs via MCP:
 
 ```bash
 ./scripts/setup-railway.sh    # or: npx incontrol-agents setup railway
@@ -70,7 +95,7 @@ To provision your private **by-day Railway PostgreSQL archive** automatically:
 ## Architecture
 
 <p align="center">
-  <img src="docs/architecture-aie.svg" alt="InControl Architecture — Local Agents to Hub :4747 to Mac, Phone, WhatsApp, and Railway Postgres" width="100%" />
+  <img src="docs/architecture-aie.svg" alt="TheOne Architecture — Local Agents to Hub :4747 to Mac, Phone, WhatsApp, and Railway Postgres" width="100%" />
 </p>
 
 ---
@@ -79,21 +104,18 @@ To provision your private **by-day Railway PostgreSQL archive** automatically:
 
 | Agent | Integration | Setup Command |
 |---|---|---|
-| **Claude Code** | Native hooks (`PreToolUse`, `Notification`, `Stop`, `UserPromptSubmit`) | `incontrol setup claude-code --install` |
+| **Claude Code** | Native hooks (`PreToolUse`, `Notification`, `Stop`, `UserPromptSubmit`) | `incontrol setup claude-code --install --gate-bash` |
 | **Antigravity** | Auto-discovered + plugin (`hooks.json`, MCP & steering rule) | `incontrol setup antigravity` |
 | **Cursor / Windsurf / VS Code** | Stdio MCP server | `incontrol setup cursor` (or `incontrol setup mcp --ide VSCode`) |
 | **ChatGPT Desktop & Codex** | Auto-discovered on macOS + `codex queue` + MCP | `incontrol setup codex` (or `incontrol wrap --name Codex -- codex`) |
 | **Aider / OpenCode / Gemini CLI / any CLI** | Process wrapper piping replies straight to stdin | `incontrol wrap --name Gemini -- gemini` |
 | **Custom Agents** | REST API, WebSocket, Node & Python SDKs | See [SDKs & API](#custom-agents--http-api) below |
 
-### Claude Code: Approve Bash From Your Phone
-Add `--gate-bash` to your `PreToolUse` hook command. Every Bash invocation pauses for your **Approve** or **Deny** tap in InControl; denying blocks execution and returns your explanation directly to Claude.
-
 ---
 
 ## Cross-IDE Context & Daily Archive
 
-InControl continuously logs structured agent events to `~/.incontrol/history/YYYY-MM-DD.jsonl` and automatically snapshots & syncs changes every **15 minutes**, at **midnight day rollover**, and for any missed previous day — or click **Save Day** anytime for an instant checkpoint.
+TheOne continuously logs structured agent events to `~/.incontrol/history/YYYY-MM-DD.jsonl` and automatically snapshots & syncs changes every **15 minutes**, at **midnight day rollover**, and for any missed previous day — or click **Save Day** anytime for an instant checkpoint.
 
 Secrets (PEM keys, `Bearer` tokens, JWTs, API key prefixes, and credentialed URLs) are redacted by `redactSecrets` before saving locally or pushing to Railway `daily_contexts`.
 
@@ -174,8 +196,8 @@ New connectors, IDE integrations, SDK improvements, and fixes are always welcome
 
 ## License & Contact
 
-**[FSL-1.1-MIT](LICENSE)** — Copyright © 2026 **Ioannis Zempekakis**.
-Free for everyone to use, inspect, and modify for personal or internal business use; commercial resale or competing products/services are restricted for 2 years before automatically converting to MIT.
+**Source-Available — [FSL-1.1-MIT](LICENSE)** (Functional Source License, Version 1.1, MIT Future License) — Copyright © 2026 **Ioannis Zempekakis**.
+Free for everyone to use, inspect, and modify for personal or internal business use; commercial resale or competing hosted products/services are restricted for 2 years before automatically converting to the permissive **MIT** license.
 
 Questions, feedback, or commercial licensing inquiries:
 - **X:** [@ioanniszempe](https://x.com/ioanniszempe)

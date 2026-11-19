@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     var autoPopupOnly: Bool = true
     var autoTileBesidePanel: Bool = true
     var demoMode: Bool = false
-    var manuallyShown: Bool = false
+    var manuallyShown: Bool = true
     var hadUrgentAction: Bool = false
     var lastUrgentSignature: String = ""
     var statePollTimer: Timer?
@@ -62,8 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         setupPanel()
         setupStatusItem()
         positionDockFrame(animate: false)
-        // Stay hidden in menu bar by default; only pop up when an agent requires user action
-        panel.orderOut(nil)
+        panel.orderFrontRegardless()
         startStatePoller()
         NotificationCenter.default.addObserver(
             self, selector: #selector(handleScreenChange),
