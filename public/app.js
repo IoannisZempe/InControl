@@ -309,7 +309,19 @@ async function focusAgent(agentId) {
   if (DEMO_MODE) return toast('Focused window (demo)');
   const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/focus`, { method: 'POST' });
   const data = await res.json().catch(() => ({}));
-  toast(data.ok ? `Focused ${data.appName}` : data.reason || 'Could not focus window');
+  if (!data.ok) {
+    return toast(data.reason || data.error || 'Could not focus window');
+  }
+  if (data.deepLinked) {
+    return toast(`Opened ${data.projectName || 'thread'} in ${data.appName}`);
+  }
+  if (data.exactTarget) {
+    return toast(`Focused ${data.projectName || 'window'} in ${data.appName}`);
+  }
+  if (data.needsAccessibility) {
+    return toast(`Focused ${data.appName} (grant Accessibility for exact window jump)`, 3600);
+  }
+  toast(`Focused ${data.appName}`);
 }
 
 // ---------------- Rendering ----------------
@@ -447,7 +459,7 @@ function renderCounts() {
       ? (c.needs_input || 0) + (c.needs_attention || 0)
       : c.needs_input || 0;
   document.body.dataset.urgent = actionRequired > 0 ? 'true' : 'false';
-  document.title = actionRequired > 0 ? `(${actionRequired}) InControl` : 'InControl';
+  document.title = actionRequired > 0 ? `(${actionRequired}) TheOne` : 'TheOne';
   window.webkit?.messageHandlers?.badge?.postMessage(document.title);
 }
 

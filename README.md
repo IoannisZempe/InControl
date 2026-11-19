@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/hero-aie.svg" alt="InControl — Local-First Mission Control for AI Coding Agents" width="100%" />
+  <img src="docs/hero-aie.svg" alt="TheOne — One Panel to Rule All Your AI Coding Agents" width="100%" />
 </p>
 
 <p align="center">
@@ -12,18 +12,18 @@
 </p>
 
 <p align="center">
-  <strong>One always-on side panel &amp; mobile control room for all your AI coding agents.</strong><br/>
+  <strong>TheOne — One panel to rule them all.</strong><br/>
   See who needs your input, who finished for review, and who is still shipping — across IDEs, terminals, your phone, and WhatsApp.
 </p>
 
 ---
 
-## Inside the Control Room
+## Inside TheOne
 
 <table>
   <tr>
     <td width="310" valign="top" align="center">
-      <img src="docs/screenshot.png" alt="InControl live macOS Liquid Glass Side Panel" width="290" />
+      <img src="docs/screenshot.png" alt="TheOne live macOS Liquid Glass Side Panel" width="290" />
     </td>
     <td valign="top">
       <strong><code>// QUICK START</code></strong>

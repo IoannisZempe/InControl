@@ -131,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         if count > 0 {
             let isNewRequest = !hadUrgentAction || (!signature.isEmpty && signature != lastUrgentSignature)
             statusItem.button?.image = makeMenuBarIcon(urgent: true)
-            statusItem.button?.title = " \(count) InControl"
+            statusItem.button?.title = " \(count) TheOne"
             hadUrgentAction = true
             if !signature.isEmpty {
                 lastUrgentSignature = signature
@@ -141,7 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             }
         } else {
             statusItem.button?.image = makeMenuBarIcon(urgent: false)
-            statusItem.button?.title = " InControl"
+            statusItem.button?.title = " TheOne"
             if hadUrgentAction {
                 hadUrgentAction = false
                 lastUrgentSignature = ""
@@ -310,7 +310,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         ensureHubRunning()
         let html = """
         <body style="background:transparent;color:#98989d;font:13px -apple-system;display:grid;place-items:center;height:100vh;margin:0;text-align:center">
-        <div><h3 style="color:#f5f5f7;font-weight:600;margin-bottom:6px">Starting InControl Hub…</h3>
+        <div><h3 style="color:#f5f5f7;font-weight:600;margin-bottom:6px">Starting TheOne Hub…</h3>
         <p style="margin:0">Connecting to local agent watcher…</p></div></body>
         """
         webView.loadHTMLString(html, baseURL: nil)
@@ -456,35 +456,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         }
     }
 
-    // MARK: Menu bar & Custom Vector Logo Icon
+    // MARK: Menu bar & Custom Vector Logo Icon (The One Ring & Eye)
 
     func makeMenuBarIcon(urgent: Bool) -> NSImage {
         let size = NSSize(width: 16, height: 16)
         let img = NSImage(size: size, flipped: false) { _ in
             let center = NSPoint(x: 8, y: 8)
-            let primaryColor = urgent
-                ? NSColor(calibratedRed: 1.0, green: 0.35, blue: 0.30, alpha: 1.0)
-                : NSColor(calibratedRed: 0.38, green: 0.82, blue: 1.0, alpha: 0.95)
+            // Forged gold by default; fiery ember-red when an agent urgently needs input
+            let ringColor = urgent
+                ? NSColor(calibratedRed: 1.0, green: 0.36, blue: 0.25, alpha: 1.0)
+                : NSColor(calibratedRed: 0.91, green: 0.77, blue: 0.41, alpha: 0.96)
+            let glowColor = urgent
+                ? NSColor(calibratedRed: 1.0, green: 0.45, blue: 0.20, alpha: 0.28)
+                : NSColor(calibratedRed: 0.91, green: 0.77, blue: 0.41, alpha: 0.24)
 
-            // Outer orbit ring
-            let orbit = NSBezierPath()
-            orbit.appendArc(withCenter: center, radius: 6.2, startAngle: 25, endAngle: 315)
-            orbit.lineWidth = 1.4
-            orbit.lineCapStyle = .round
-            primaryColor.setStroke()
-            orbit.stroke()
+            // Outer Forged One Ring band
+            let ring = NSBezierPath()
+            ring.appendArc(withCenter: center, radius: 6.1, startAngle: 0, endAngle: 360)
+            ring.lineWidth = 1.65
+            ringColor.setStroke()
+            ring.stroke()
 
-            // Central command core
-            let coreRect = NSRect(x: 5.7, y: 5.7, width: 4.6, height: 4.6)
-            let core = NSBezierPath(ovalIn: coreRect)
-            primaryColor.setFill()
-            core.fill()
+            // Inner vertical flame / eye contour
+            let flame = NSBezierPath(ovalIn: NSRect(x: 6.1, y: 3.4, width: 3.8, height: 9.2))
+            glowColor.setFill()
+            flame.fill()
 
-            // Satellite node at orbit tip
-            let satRect = NSRect(x: 11.4, y: 10.2, width: 3.0, height: 3.0)
-            let sat = NSBezierPath(ovalIn: satRect)
-            (urgent ? NSColor.systemOrange : NSColor.systemGreen).setFill()
-            sat.fill()
+            // Vertical Eye Iris
+            let iris = NSBezierPath(ovalIn: NSRect(x: 6.85, y: 4.3, width: 2.3, height: 7.4))
+            ringColor.setFill()
+            iris.fill()
+
+            // Vertical Slit Pupil
+            let pupil = NSBezierPath(ovalIn: NSRect(x: 7.55, y: 5.4, width: 0.9, height: 5.2))
+            NSColor(calibratedWhite: 0.04, alpha: 1.0).setFill()
+            pupil.fill()
             return true
         }
         img.isTemplate = false
@@ -495,7 +501,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = makeMenuBarIcon(urgent: false)
         statusItem.button?.imagePosition = .imageLeading
-        statusItem.button?.title = " InControl"
+        statusItem.button?.title = " TheOne"
         let menu = NSMenu()
         menu.addItem(withTitle: "Show / Hide Panel", action: #selector(togglePanel), keyEquivalent: "i")
         let autoItem = NSMenuItem(
@@ -618,7 +624,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             applyUrgentState(count: 0, signature: "")
         } else if !hadUrgentAction {
             statusItem.button?.image = makeMenuBarIcon(urgent: false)
-            statusItem.button?.title = " InControl"
+            statusItem.button?.title = " TheOne"
         }
     }
 }

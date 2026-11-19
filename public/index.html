@@ -9,7 +9,7 @@
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
   <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="manifest" href="/manifest.json" />
-  <title>InControl</title>
+  <title>TheOne</title>
   <link rel="stylesheet" href="/styles.css?v=16" />
 </head>
 <body data-theme="obsidian" data-logo="orbit">
@@ -23,42 +23,40 @@
 
       <div class="brand-row">
         <div class="brand-left">
-          <div class="brand-logo-wrap" id="brand-logo-trigger" title="InControl Mission Control · Click to customize logo & functions">
-            <!-- Concept 1: Command Orbit (Default) -->
-            <svg class="brand-logo logo-orbit" width="22" height="22" viewBox="0 0 32 32" fill="none">
-              <circle cx="16" cy="16" r="12" stroke="currentColor" stroke-opacity="0.28" stroke-width="1.6" stroke-dasharray="3 2.5"/>
-              <path d="M 7.5 7.5 A 12 12 0 1 1 5.6 21" stroke="url(#hdrGrad)" stroke-width="2.2" stroke-linecap="round"/>
-              <circle cx="16" cy="16" r="4.5" fill="url(#hdrGrad)"/>
-              <circle cx="16" cy="16" r="1.8" fill="#ffffff"/>
-              <circle class="logo-sat-1" cx="7.5" cy="7.5" r="2.3" fill="#30d158"/>
-              <circle class="logo-sat-2" cx="26.2" cy="10.2" r="2.3" fill="#64d2ff"/>
+          <div class="brand-logo-wrap" id="brand-logo-trigger" title="TheOne — One panel to rule them all · Click to customize logo & functions">
+            <!-- Concept 1: The One Ring & Eye (Default) -->
+            <svg class="brand-logo logo-orbit" width="22" height="22" viewBox="14 14 100 100" fill="none">
               <defs>
-                <linearGradient id="hdrGrad" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
-                  <stop offset="0%" stop-color="#64d2ff"/>
-                  <stop offset="50%" stop-color="#0a84ff"/>
-                  <stop offset="100%" stop-color="#5e5ce6"/>
+                <linearGradient id="hdrRingGold" x1="20" y1="16" x2="108" y2="110" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stop-color="#fff6d6"/>
+                  <stop offset="50%" stop-color="#e8c468"/>
+                  <stop offset="100%" stop-color="#b88628"/>
                 </linearGradient>
               </defs>
+              <circle cx="64" cy="64" r="41" stroke="url(#hdrRingGold)" stroke-width="7" stroke-opacity="0.94"/>
+              <circle cx="64" cy="64" r="32" stroke="#fff6d6" stroke-width="1.1" stroke-opacity="0.35" stroke-dasharray="3 5"/>
+              <path d="M64 33 C74 46 75 82 64 95 C53 82 54 46 64 33 Z" fill="url(#hdrRingGold)" fill-opacity="0.28"/>
+              <ellipse class="logo-sat-1" cx="64" cy="64" rx="4.2" ry="22" fill="url(#hdrRingGold)"/>
+              <ellipse cx="64" cy="64" rx="1.8" ry="14" fill="#070709"/>
             </svg>
-            <!-- Concept 2: HUD Reticle -->
-            <svg class="brand-logo logo-reticle" width="22" height="22" viewBox="0 0 32 32" fill="none">
-              <path d="M5 11V7a2 2 0 0 1 2-2h4M21 5h4a2 2 0 0 1 2 2v4M27 21v4a2 2 0 0 1-2 2h-4M11 27H7a2 2 0 0 1-2-2v-4" stroke="#64d2ff" stroke-width="2.2" stroke-linecap="round"/>
-              <rect x="11.5" y="11.5" width="9" height="9" rx="2.2" transform="rotate(45 16 16)" fill="url(#hdrGrad)" stroke="#ffffff" stroke-opacity="0.6" stroke-width="1.2"/>
-              <circle cx="16" cy="16" r="1.8" fill="#ffffff"/>
+            <!-- Concept 2: Stone of Anor (Seeing-Stone) -->
+            <svg class="brand-logo logo-reticle" width="22" height="22" viewBox="14 14 100 100" fill="none">
+              <circle cx="64" cy="64" r="42" fill="url(#hdrRingGold)" fill-opacity="0.08" stroke="url(#hdrRingGold)" stroke-opacity="0.45" stroke-width="2.5"/>
+              <path d="M 35 40 A 36 36 0 1 0 96 76 A 29 29 0 1 1 35 40 Z" fill="url(#hdrRingGold)"/>
+              <circle cx="66" cy="60" r="14" fill="url(#hdrRingGold)" fill-opacity="0.25" stroke="url(#hdrRingGold)" stroke-width="2.5"/>
+              <ellipse cx="66" cy="60" rx="3.2" ry="8.5" fill="#fff6d6"/>
             </svg>
-            <!-- Concept 3: Control Sliders -->
-            <svg class="brand-logo logo-sliders" width="22" height="22" viewBox="0 0 32 32" fill="none">
-              <line x1="10" y1="6" x2="10" y2="26" stroke="#ffffff" stroke-opacity="0.28" stroke-width="2.2" stroke-linecap="round"/>
-              <line x1="10" y1="14" x2="10" y2="26" stroke="#64d2ff" stroke-width="2.4" stroke-linecap="round"/>
-              <circle cx="10" cy="12" r="3.6" fill="#0a84ff" stroke="#ffffff" stroke-width="1.5"/>
-              <line x1="22" y1="6" x2="22" y2="26" stroke="#ffffff" stroke-opacity="0.28" stroke-width="2.2" stroke-linecap="round"/>
-              <line x1="22" y1="19" x2="22" y2="26" stroke="#30d158" stroke-width="2.4" stroke-linecap="round"/>
-              <circle cx="22" cy="18" r="3.6" fill="#30d158" stroke="#ffffff" stroke-width="1.5"/>
+            <!-- Concept 3: Citadel Spire -->
+            <svg class="brand-logo logo-sliders" width="22" height="22" viewBox="14 14 100 100" fill="none">
+              <circle cx="64" cy="68" r="42" stroke="url(#hdrRingGold)" stroke-opacity="0.3" stroke-width="2" stroke-dasharray="5 4"/>
+              <path d="M 31 44 A 42 42 0 1 1 28 88" stroke="url(#hdrRingGold)" stroke-opacity="0.7" stroke-width="3" stroke-linecap="round"/>
+              <path d="M64 18 L78 88 L67 82 L67 44 L61 44 L61 82 L50 88 Z" fill="url(#hdrRingGold)"/>
+              <circle cx="64" cy="13" r="3.5" fill="#fff6d6"/>
             </svg>
             <span id="ws-indicator" class="ws-dot connected" title="Connected to local hub"></span>
           </div>
           <div class="brand-title-stack">
-            <span class="brand-title">InControl</span>
+            <span class="brand-title">TheOne</span>
           </div>
           <span id="urgent-pill" class="urgent-pill hidden">0 waiting</span>
         </div>
@@ -371,7 +369,7 @@ incontrol wrap --name "Aider" -- aider</pre>
   <div id="modal-settings" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-settings-title">
     <div class="modal-card modal-card-wide">
       <div class="modal-header">
-        <h2 id="modal-settings-title">Customize InControl</h2>
+        <h2 id="modal-settings-title">Customize TheOne</h2>
         <button class="modal-close" data-close="modal-settings" aria-label="Close">✕</button>
       </div>
 
@@ -427,42 +425,40 @@ incontrol wrap --name "Aider" -- aider</pre>
         </div>
 
         <div class="wa-field">
-          <label>InControl Brand Logo Mark</label>
+          <label>TheOne Brand Logo Mark</label>
           <div class="logo-picker-grid">
             <button type="button" class="logo-choice active" data-logo-choice="orbit">
-              <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
-                <circle cx="16" cy="16" r="12" stroke="#64d2ff" stroke-opacity="0.35" stroke-width="1.6" stroke-dasharray="3 2.5"/>
-                <path d="M 7.5 7.5 A 12 12 0 1 1 5.6 21" stroke="#0a84ff" stroke-width="2.4" stroke-linecap="round"/>
-                <circle cx="16" cy="16" r="4.8" fill="#0a84ff"/>
-                <circle cx="16" cy="16" r="1.9" fill="#ffffff"/>
-                <circle cx="7.5" cy="7.5" r="2.4" fill="#30d158"/>
-                <circle cx="26.2" cy="10.2" r="2.4" fill="#ff9f0a"/>
+              <svg width="30" height="30" viewBox="14 14 100 100" fill="none">
+                <circle cx="64" cy="64" r="41" stroke="#e8c468" stroke-width="7" stroke-opacity="0.94"/>
+                <circle cx="64" cy="64" r="32" stroke="#fff6d6" stroke-width="1.2" stroke-opacity="0.35" stroke-dasharray="3 5"/>
+                <path d="M64 33 C74 46 75 82 64 95 C53 82 54 46 64 33 Z" fill="#e8c468" fill-opacity="0.28"/>
+                <ellipse cx="64" cy="64" rx="4.2" ry="22" fill="#e8c468"/>
+                <ellipse cx="64" cy="64" rx="1.8" ry="14" fill="#070709"/>
               </svg>
-              <span class="logo-choice-title">Command Orbit</span>
-              <span class="logo-choice-sub">Agents orbiting your core</span>
+              <span class="logo-choice-title">The One Ring & Eye</span>
+              <span class="logo-choice-sub">One panel to rule them all</span>
             </button>
 
             <button type="button" class="logo-choice" data-logo-choice="reticle">
-              <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
-                <path d="M5 11V7a2 2 0 0 1 2-2h4M21 5h4a2 2 0 0 1 2 2v4M27 21v4a2 2 0 0 1-2 2h-4M11 27H7a2 2 0 0 1-2-2v-4" stroke="#64d2ff" stroke-width="2.2" stroke-linecap="round"/>
-                <rect x="11.2" y="11.2" width="9.6" height="9.6" rx="2.4" transform="rotate(45 16 16)" fill="#5e5ce6" stroke="#ffffff" stroke-width="1.3"/>
-                <circle cx="16" cy="16" r="1.9" fill="#ffffff"/>
+              <svg width="30" height="30" viewBox="14 14 100 100" fill="none">
+                <circle cx="64" cy="64" r="42" fill="#e8c468" fill-opacity="0.08" stroke="#e8c468" stroke-opacity="0.45" stroke-width="2.5"/>
+                <path d="M 35 40 A 36 36 0 1 0 96 76 A 29 29 0 1 1 35 40 Z" fill="#e8c468"/>
+                <circle cx="66" cy="60" r="14" fill="#e8c468" fill-opacity="0.25" stroke="#e8c468" stroke-width="2.5"/>
+                <ellipse cx="66" cy="60" rx="3.2" ry="8.5" fill="#fff6d6"/>
               </svg>
-              <span class="logo-choice-title">HUD Reticle</span>
-              <span class="logo-choice-sub">Aviation lock-on target</span>
+              <span class="logo-choice-title">Stone of Anor</span>
+              <span class="logo-choice-sub">Master Seeing-Stone</span>
             </button>
 
             <button type="button" class="logo-choice" data-logo-choice="sliders">
-              <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
-                <line x1="10" y1="6" x2="10" y2="26" stroke="#ffffff" stroke-opacity="0.28" stroke-width="2.2" stroke-linecap="round"/>
-                <line x1="10" y1="14" x2="10" y2="26" stroke="#64d2ff" stroke-width="2.4" stroke-linecap="round"/>
-                <circle cx="10" cy="12" r="3.6" fill="#0a84ff" stroke="#ffffff" stroke-width="1.5"/>
-                <line x1="22" y1="6" x2="22" y2="26" stroke="#ffffff" stroke-opacity="0.28" stroke-width="2.2" stroke-linecap="round"/>
-                <line x1="22" y1="19" x2="22" y2="26" stroke="#30d158" stroke-width="2.4" stroke-linecap="round"/>
-                <circle cx="22" cy="18" r="3.6" fill="#30d158" stroke="#ffffff" stroke-width="1.5"/>
+              <svg width="30" height="30" viewBox="14 14 100 100" fill="none">
+                <circle cx="64" cy="68" r="42" stroke="#e8c468" stroke-opacity="0.3" stroke-width="2" stroke-dasharray="5 4"/>
+                <path d="M 31 44 A 42 42 0 1 1 28 88" stroke="#e8c468" stroke-opacity="0.7" stroke-width="3" stroke-linecap="round"/>
+                <path d="M64 18 L78 88 L67 82 L67 44 L61 44 L61 82 L50 88 Z" fill="#e8c468"/>
+                <circle cx="64" cy="13" r="3.5" fill="#fff6d6"/>
               </svg>
-              <span class="logo-choice-title">Control Faders</span>
-              <span class="logo-choice-sub">Tactile studio console</span>
+              <span class="logo-choice-title">Citadel Spire</span>
+              <span class="logo-choice-sub">Tower of Guard</span>
             </button>
           </div>
         </div>
