@@ -184,7 +184,7 @@ const { action, text } = await agent.askHuman('Promote to production?', ['Promot
 - [x] Pairing token & QR authentication for phones and LAN/Tailscale devices
 - [x] Apple Liquid Glass native macOS floating side panel + Apple HomeView/HomeKit
 - [x] Automatic 15-minute & rollover Daily Context Archive -> Railway PostgreSQL + cross-IDE MCP handoff
-- [ ] Web Push notifications for background PWA sessions
+- [x] Web Push notifications for background PWA sessions (RFC 8291 `aes128gcm` + VAPID + Service Worker)
 - [ ] Native VS Code / JetBrains status-bar extension
 - [ ] Optional end-to-end encrypted relay outside your local network
 

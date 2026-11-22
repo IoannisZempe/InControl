@@ -246,11 +246,53 @@ export function scanAntigravitySessions(store, seenMtimes = new Map(), dismissed
       currentStep,
       attentionReason,
       pendingPrompt,
+      windowHint: projectName !== 'Antigravity' ? projectName : undefined,
+      metadata: {
+        conversationId: item.convId,
+        transcriptPath: item.transcriptPath,
+      },
       updatedAt: item.mtimeMs,
     });
     if (pendingPrompt?.requestId) {
       updatedAgent._lastAgyPromptId = pendingPrompt.requestId;
       updatedAgent._lastAgyAnsweredCount = updatedAgent.metrics?.promptsAnswered || 0;
+    }
+  }
+
+  // Expire stale Antigravity attention/working/input states even after conversations fall out of the top-3 active list
+  // (e.g. Stop hooks fired hours earlier). Keeps yesterday's finished sessions from clogging "Needs Review".
+  const now = Date.now();
+  for (const [id, agent] of store.agents.entries()) {
+    if (!id.startsWith('agy-')) continue;
+    const ageMs = now - (agent.metrics?.updatedAt || agent.metrics?.startedAt || 0);
+    if (agent.status === 'needs_attention' && ageMs >= 15 * 60_000) {
+      store.upsertAgent({
+        id,
+        status: 'idle',
+        currentStep: 'Idle',
+        attentionReason: null,
+        pendingPrompt: null,
+        updatedAt: agent.metrics?.updatedAt,
+      });
+    } else if (agent.status === 'working' && ageMs >= 10 * 60_000) {
+      store.upsertAgent({
+        id,
+        status: 'idle',
+        currentStep: 'Idle',
+        attentionReason: null,
+        updatedAt: agent.metrics?.updatedAt,
+      });
+    } else if (agent.status === 'needs_input' && ageMs >= 45 * 60_000) {
+      store.upsertAgent({
+        id,
+        status: 'idle',
+        currentStep: 'Idle',
+        attentionReason: null,
+        pendingPrompt: null,
+        updatedAt: agent.metrics?.updatedAt,
+      });
+    } else if (agent.status === 'idle' && ageMs >= 12 * 3600_000) {
+      store.removeAgent(id);
     }
   }
 }

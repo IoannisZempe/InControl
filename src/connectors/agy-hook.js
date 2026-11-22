@@ -40,6 +40,7 @@ export async function runAgyHook(args = []) {
     ide: 'Antigravity',
     workspace,
     projectName,
+    metadata: { conversationId: convId },
     ...(lastUserInput ? { currentTask: lastUserInput } : {}),
   };
 

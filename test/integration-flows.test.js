@@ -15,6 +15,7 @@ import vm from 'node:vm';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
+import crypto from 'node:crypto';
 import { createInControlHub } from '../src/server/hub.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -783,6 +784,333 @@ test('flow: ChatGPT/Codex generic-CWD MCP incontrol_ask_human correlates with ac
   } finally {
     rl.close();
     mcpChild.kill();
+    await hub.close();
+  }
+});
+
+test('flow: Mobile App (Bearer + WebSocket) receives live Bash gate, approves remotely, and runs macro', async () => {
+  // WHY: Verifies the complete contract our iOS SwiftUI app and mobile PWA rely on:
+  // 1. Public assets (/apple-touch-icon.png, /icon.svg, /manifest.json) load pre-auth
+  // 2. Strict Bearer auth protects /api/state & /api/agents/*
+  // 3. WebSocket /ws?token=... receives live needs_input broadcast when an agent blocks on Bash
+  // 4. Mobile Approve unblocks /api/agents/ask live and updates WS state back to working
+  // 5. Mobile 1-click custom function (fn_tests) queues prompt cleanly
+  const mobileToken = 'mobile-iphone-e2e-token-987654';
+  const hub = await createInControlHub({
+    port: 0,
+    macNotifications: false,
+    strict: true,
+    token: mobileToken,
+    autoWatch: false,
+  });
+  const port = hub.server.address().port;
+  const base = `http://127.0.0.1:${port}`;
+  const authHeaders = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${mobileToken}`,
+  };
+
+  let ws;
+  try {
+    // 1. Pre-auth public mobile icons & manifest return 200 with expected content types
+    const touchRes = await fetch(`${base}/apple-touch-icon.png`);
+    assert.equal(touchRes.status, 200);
+    assert.match(touchRes.headers.get('content-type') || '', /image\/png/);
+
+    const manifestRes = await fetch(`${base}/manifest.json`);
+    assert.equal(manifestRes.status, 200);
+    const manifestJson = await manifestRes.json();
+    assert.equal(manifestJson.short_name, 'TheOne');
+
+    // 2. Strict auth blocks unauthenticated mobile API calls
+    const unauthState = await fetch(`${base}/api/state`);
+    assert.equal(unauthState.status, 401);
+
+    // 3. Connect mobile WebSocket with ?token= and attach listener before open
+    const wsMessages = [];
+    ws = new WebSocket(`ws://127.0.0.1:${port}/ws?token=${mobileToken}`);
+    ws.on('message', (raw) => {
+      try {
+        wsMessages.push(JSON.parse(raw.toString()));
+      } catch {}
+    });
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('WS open timeout')), 3000);
+      ws.on('open', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      ws.on('error', (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+
+    const waitForWsState = async (predicate, label) => {
+      for (let i = 0; i < 60; i += 1) {
+        const hit = wsMessages.find((m) => m.state && predicate(m.state));
+        if (hit) return hit.state;
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      throw new Error(`Timed out waiting for WS state: ${label}`);
+    };
+
+    const initialState = await waitForWsState((s) => Array.isArray(s.agents), 'initial state_sync');
+    assert.equal(initialState.counts.needs_input, 0);
+
+    // 4. Agent blocks on a risky Bash migration via /api/agents/ask (wait: true)
+    const askPromise = fetch(`${base}/api/agents/ask`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        id: 'claude-payments-mobile',
+        name: 'Claude Code',
+        provider: 'claude-code',
+        ide: 'Claude Code',
+        workspace: ROOT,
+        branch: 'main',
+        question: 'Allow Bash command in payments-api?',
+        command: 'npx prisma migrate dev --name add_ledger',
+        options: ['Approve', 'Deny'],
+        wait: true,
+        timeoutMs: 10_000,
+      }),
+    }).then((r) => r.json());
+
+    // Mobile WebSocket immediately sees card jump into needs_input
+    const blockedState = await waitForWsState(
+      (s) =>
+        s.counts?.needs_input === 1 &&
+        s.agents.some(
+          (a) =>
+            a.id === 'claude-payments-mobile' &&
+            a.status === 'needs_input' &&
+            a.pendingPrompt?.command === 'npx prisma migrate dev --name add_ledger'
+        ),
+      'needs_input Bash prompt broadcast'
+    );
+    const waitingCard = blockedState.agents.find((a) => a.id === 'claude-payments-mobile');
+    assert.ok(waitingCard?.pendingPrompt?.requestId);
+
+    // 5. Mobile app taps Approve with Bearer token
+    const respondRes = await fetch(`${base}/api/agents/claude-payments-mobile/respond`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        action: 'approve',
+        requestId: waitingCard.pendingPrompt.requestId,
+        sourceDevice: 'iPhone App',
+      }),
+    });
+    assert.equal(respondRes.status, 200);
+    const respondJson = await respondRes.json();
+    assert.equal(respondJson.ok, true);
+    assert.equal(respondJson.deliveredLive, true);
+
+    // Blocking agent ask resolves immediately with iPhone App approval
+    const askResolution = await askPromise;
+    assert.equal(askResolution.ok, true);
+    assert.equal(askResolution.action, 'approve');
+    assert.equal(askResolution.sourceDevice, 'iPhone App');
+
+    // Mobile WebSocket receives updated working state
+    const resumedState = await waitForWsState(
+      (s) =>
+        s.counts?.needs_input === 0 &&
+        s.agents.some((a) => a.id === 'claude-payments-mobile' && a.status === 'working'),
+      'resumed working state'
+    );
+    assert.equal(resumedState.counts.working, 1);
+
+    // 6. Mobile app taps 1-click "Run Tests" macro (fn_tests)
+    const macroRes = await fetch(`${base}/api/agents/claude-payments-mobile/function`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ functionId: 'fn_tests', sourceDevice: 'iPhone App' }),
+    });
+    assert.equal(macroRes.status, 200);
+    const macroJson = await macroRes.json();
+    assert.equal(macroJson.ok, true);
+
+    const msgsJson = await (
+      await fetch(`${base}/api/agents/claude-payments-mobile/messages`, { headers: authHeaders })
+    ).json();
+    assert.equal(msgsJson.ok, true);
+    assert.ok(msgsJson.messages.some((m) => /test suite/i.test(m.text || '')));
+  } finally {
+    if (ws) ws.close();
+    await hub.close();
+  }
+});
+
+test('flow: Mobile App Deny with reason blocks risky Bash command and notifies agent', async () => {
+  const mobileToken = 'mobile-deny-token-123';
+  const hub = await createInControlHub({
+    port: 0,
+    macNotifications: false,
+    strict: true,
+    token: mobileToken,
+    autoWatch: false,
+  });
+  const port = hub.server.address().port;
+  const base = `http://127.0.0.1:${port}`;
+  const authHeaders = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${mobileToken}`,
+  };
+
+  try {
+    const askPromise = fetch(`${base}/api/agents/ask`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        id: 'claude-deny-mobile',
+        name: 'Claude Code',
+        provider: 'claude-code',
+        question: 'Allow rm -rf build/?',
+        command: 'rm -rf build/',
+        options: ['Approve', 'Deny'],
+        wait: true,
+        timeoutMs: 10_000,
+      }),
+    }).then((r) => r.json());
+
+    // Wait until prompt is registered
+    let waiting = null;
+    for (let i = 0; i < 40; i += 1) {
+      const st = await (await fetch(`${base}/api/state`, { headers: authHeaders })).json();
+      waiting = st.agents.find((a) => a.id === 'claude-deny-mobile' && a.status === 'needs_input');
+      if (waiting) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    assert.ok(waiting);
+
+    const denyRes = await (
+      await fetch(`${base}/api/agents/claude-deny-mobile/respond`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          action: 'deny',
+          text: 'Run on staging first',
+          requestId: waiting.pendingPrompt.requestId,
+          sourceDevice: 'iPhone App',
+        }),
+      })
+    ).json();
+    assert.equal(denyRes.ok, true);
+    assert.equal(denyRes.agent.status, 'needs_attention');
+
+    const askResolution = await askPromise;
+    assert.equal(askResolution.ok, true);
+    assert.equal(askResolution.action, 'deny');
+    assert.equal(askResolution.text, 'Run on staging first');
+    assert.equal(askResolution.sourceDevice, 'iPhone App');
+  } finally {
+    await hub.close();
+  }
+});
+
+test('flow: PWA Service Worker + Web Push subscribes, pushes encrypted Bash alert, and prunes 410 Gone', async () => {
+  const pushedCalls = [];
+  let nextPushStatus = 201;
+  const mockPushFetch = async (url, init) => {
+    pushedCalls.push({ url, headers: init.headers, body: Buffer.from(init.body) });
+    return { ok: nextPushStatus >= 200 && nextPushStatus < 300, status: nextPushStatus };
+  };
+
+  const token = 'pwa-webpush-e2e-token';
+  const hub = await createInControlHub({
+    port: 0,
+    macNotifications: false,
+    strict: true,
+    token,
+    autoWatch: false,
+    pushFetch: mockPushFetch,
+  });
+  const port = hub.server.address().port;
+  const base = `http://127.0.0.1:${port}`;
+  const authHeaders = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
+
+  try {
+    // 1. /sw.js serves pre-auth with Service-Worker-Allowed header
+    const swRes = await fetch(`${base}/sw.js`);
+    assert.equal(swRes.status, 200);
+    assert.match(swRes.headers.get('content-type') || '', /javascript/);
+    assert.equal(swRes.headers.get('service-worker-allowed'), '/');
+
+    // 2. Fetch VAPID public key from /api/push/config
+    const cfgRes = await (await fetch(`${base}/api/push/config`, { headers: authHeaders })).json();
+    assert.equal(cfgRes.ok, true);
+    assert.ok(cfgRes.publicKey && cfgRes.publicKey.length > 60);
+
+    // 3. Subscribe a simulated iPhone PWA device
+    const uaEcdh = crypto.createECDH('prime256v1');
+    uaEcdh.generateKeys();
+    const p256dh = uaEcdh.getPublicKey().toString('base64url');
+    const auth = crypto.randomBytes(16).toString('base64url');
+    const appleEndpoint = 'https://web.push.apple.com/QBS_THEONE_TEST_SUB';
+
+    const subRes = await (
+      await fetch(`${base}/api/push/subscribe`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          endpoint: appleEndpoint,
+          keys: { p256dh, auth },
+          deviceLabel: 'iPhone PWA',
+        }),
+      })
+    ).json();
+    assert.equal(subRes.ok, true);
+    assert.equal(subRes.status.subscriptionCount, 1);
+
+    // 4. Trigger a blocking Bash prompt -> Hub automatically dispatches encrypted Web Push
+    const askRes = await (
+      await fetch(`${base}/api/agents/ask`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          id: 'claude-push-test',
+          name: 'Claude Code',
+          provider: 'claude-code',
+          question: 'Allow prisma migrate?',
+          command: 'npx prisma migrate dev --name push_check',
+          wait: false,
+        }),
+      })
+    ).json();
+    assert.ok(askRes.requestId);
+
+    for (let i = 0; i < 30 && pushedCalls.length === 0; i += 1) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    assert.equal(pushedCalls.length, 1, 'Hub must auto-dispatch Web Push on needs_input');
+    assert.equal(pushedCalls[0].url, appleEndpoint);
+    assert.equal(pushedCalls[0].headers['Content-Encoding'], 'aes128gcm');
+    assert.match(pushedCalls[0].headers.Authorization, /^vapid t=.+, k=/);
+    assert.ok(pushedCalls[0].body.length > 86, 'Encrypted aes128gcm body must include 86-byte header + payload');
+
+    // 5. POST /api/push/test dispatches a test push
+    const testRes = await (
+      await fetch(`${base}/api/push/test`, { method: 'POST', headers: authHeaders })
+    ).json();
+    assert.equal(testRes.ok, true);
+    assert.equal(testRes.sent, 1);
+
+    // 6. HTTP 410 Gone from push service auto-prunes stale subscription
+    nextPushStatus = 410;
+    const prunedRes = await (
+      await fetch(`${base}/api/push/test`, { method: 'POST', headers: authHeaders })
+    ).json();
+    assert.equal(prunedRes.ok, true);
+    assert.equal(prunedRes.pruned, 1);
+
+    const cfgAfter = await (await fetch(`${base}/api/push/config`, { headers: authHeaders })).json();
+    assert.equal(cfgAfter.subscriptionCount, 0);
+  } finally {
     await hub.close();
   }
 });

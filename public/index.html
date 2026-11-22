@@ -7,10 +7,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#09090b" />
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-  <link rel="apple-touch-icon" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/manifest.json" />
   <title>TheOne</title>
-  <link rel="stylesheet" href="/styles.css?v=16" />
+  <link rel="stylesheet" href="/styles.css?v=18" />
 </head>
 <body data-theme="obsidian" data-logo="orbit">
   <div class="app-shell">
@@ -64,8 +64,11 @@
           <button id="btn-tile-panel" class="icon-btn panel-only-btn" title="Snap to edge & fit active page beside panel" aria-label="Fit Page Beside Panel">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
           </button>
-          <button id="btn-hide-panel" class="icon-btn panel-only-btn" title="Hide panel until action is required" aria-label="Hide Panel">
+          <button id="btn-hide-panel" class="icon-btn panel-only-btn" title="Hide until next new alert" aria-label="Hide Panel">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <button id="btn-close-stay-hidden" class="icon-btn panel-only-btn" title="Shut down & stay hidden in menu bar until you reopen it" aria-label="Close and Stay Hidden">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
           </button>
         </div>
       </div>
@@ -94,6 +97,17 @@
       </nav>
     </header>
 
+    <!-- Mobile "Install to Home Screen" Banner (shown only on mobile Safari/Chrome before install) -->
+    <div id="pwa-install-banner" class="pwa-install-banner hidden" role="region" aria-label="Install TheOne App">
+      <img src="/apple-touch-icon.png" alt="TheOne" class="pwa-banner-icon" />
+      <div class="pwa-banner-copy">
+        <div class="pwa-banner-title">Install TheOne on your Phone</div>
+        <div id="pwa-banner-sub" class="pwa-banner-sub">Tap <strong>Share (⎋)</strong> → <strong>Add to Home Screen</strong> for full-screen app &amp; push alerts.</div>
+      </div>
+      <button id="btn-pwa-install" type="button" class="pwa-install-btn hidden">Install</button>
+      <button id="btn-pwa-dismiss" type="button" class="pwa-dismiss-btn" aria-label="Dismiss install banner">✕</button>
+    </div>
+
     <!-- Main Agent Feed -->
     <main id="agent-list" class="agent-list" aria-live="polite"></main>
 
@@ -117,9 +131,9 @@
               <span class="adv-item-icon">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5" ry="2.5"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
               </span>
-              <span>Pair iPhone / iPad</span>
+              <span>Pair Phone &amp; Push</span>
             </span>
-            <span class="adv-item-badge">QR</span>
+            <span id="push-menu-badge" class="adv-item-badge">QR</span>
           </button>
 
           <button id="btn-whatsapp" class="adv-menu-item" type="button">
@@ -227,6 +241,23 @@
           <button class="copy-btn" data-copy-target="url-tailscale">Copy</button>
         </div>
       </div>
+      <div class="divider-label">Background Web Push (iOS 16.4+ &amp; Android PWA)</div>
+      <div class="pwa-push-card">
+        <div class="pwa-push-row">
+          <div>
+            <div class="pwa-push-title">Lock-Screen Push Alerts</div>
+            <div id="push-status-text" class="pwa-push-sub">Checking browser push support…</div>
+          </div>
+          <div class="pwa-push-actions">
+            <button type="button" id="btn-toggle-push" class="btn-decision primary">Enable Push</button>
+            <button type="button" id="btn-test-push" class="btn-decision">Test</button>
+          </div>
+        </div>
+        <div id="push-https-hint" class="wa-hint hidden" style="margin-top:8px;">
+          <strong>iPhone HTTPS Tip:</strong> iOS requires HTTPS for background Web Push. Run <code>tailscale serve https / http://127.0.0.1:4747</code> on your Mac, open that <code>https://*.ts.net</code> link on iPhone, tap <strong>Add to Home Screen</strong>, then tap <strong>Enable Push</strong>.
+        </div>
+      </div>
+
       <div class="modal-note">
         Rotate token anytime with <code>incontrol token --rotate</code>.
       </div>
@@ -660,6 +691,6 @@ incontrol wrap --name "Aider" -- aider</pre>
     </div>
   </div>
 
-  <script src="/app.js?v=16" type="module"></script>
+  <script src="/app.js?v=19" type="module"></script>
 </body>
 </html>

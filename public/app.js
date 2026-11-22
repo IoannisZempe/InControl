@@ -331,6 +331,7 @@ function render() {
   renderAgents();
   renderIntegrations();
   renderWhatsAppStatus();
+  renderPushStatus();
   renderCustomFunctionsList();
   renderActivity();
   detectNewInputRequests();
@@ -646,10 +647,20 @@ function renderCard(a) {
       </form>`;
   } else if (a.status === 'idle' && isCardExpanded) {
     decisionHtml = `
-      <form class="reply-form" data-act="reply-form" data-agent="${esc(a.id)}">
-        <input class="reply-input" data-reply-for="${esc(a.id)}" placeholder="Queue message or instruction…" value="${esc(draftReplies.get(a.id) || '')}" autocomplete="off" />
-        <button type="submit" class="reply-submit">Send</button>
+      <form class="reply-composer" data-act="reply-form" data-agent="${esc(a.id)}">
+        <textarea class="reply-textarea" rows="3" data-reply-for="${esc(a.id)}" placeholder="Write a message to ${esc(a.projectName || a.name)}… (Enter to send, Shift+Enter for new line)">${esc(draftReplies.get(a.id) || '')}</textarea>
+        <div class="reply-composer-actions">
+          <button type="button" class="reply-cancel" data-act="toggle-expand" data-agent="${esc(a.id)}">Cancel</button>
+          <button type="submit" class="reply-submit">Send Message</button>
+        </div>
       </form>`;
+  } else if (a.status === 'idle') {
+    decisionHtml = `
+      <div class="idle-message-bar">
+        <button type="button" class="btn-send-msg-idle" data-act="toggle-expand" data-agent="${esc(a.id)}">
+          ${ICON_REPLY}<span>Send a message</span>
+        </button>
+      </div>`;
   }
 
   const logHtml =
@@ -1004,11 +1015,31 @@ document.addEventListener('submit', (e) => {
   const form = e.target.closest('[data-act="reply-form"]');
   if (!form) return;
   e.preventDefault();
-  const input = form.querySelector('input');
+  const input = form.querySelector('input, textarea');
+  if (!input) return;
   const text = input.value.trim();
   if (!text) return;
-  respond(form.dataset.agent, 'reply', text);
+  const agentId = form.dataset.agent;
+  respond(agentId, 'reply', text);
   input.value = '';
+  draftReplies.delete(agentId);
+  expandedCards.delete(agentId);
+});
+
+document.addEventListener('keydown', (e) => {
+  const ta = e.target.closest?.('.reply-textarea');
+  if (!ta) return;
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    const form = ta.closest('[data-act="reply-form"]');
+    if (form) form.requestSubmit();
+  } else if (e.key === 'Escape') {
+    const agentId = ta.dataset.replyFor;
+    if (agentId) {
+      expandedCards.delete(agentId);
+      renderAgents();
+    }
+  }
 });
 
 document.addEventListener('pointerdown', (e) => {
@@ -1092,6 +1123,9 @@ $('#btn-tile-panel')?.addEventListener('click', () => {
 });
 $('#btn-hide-panel')?.addEventListener('click', () => {
   window.webkit?.messageHandlers?.windowDrag?.postMessage('hide');
+});
+$('#btn-close-stay-hidden')?.addEventListener('click', () => {
+  window.webkit?.messageHandlers?.windowDrag?.postMessage('stay_hidden');
 });
 
 async function saveSettingsPatch(patch) {
@@ -1602,4 +1636,237 @@ function detectDevice() {
   return 'Browser';
 }
 
+// ---------------- PWA Install Banner & Background Web Push ----------------
+let deferredInstallPrompt = null;
+let swRegistration = null;
+let localPushSubscribed = false;
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) {
+    output[i] = raw.charCodeAt(i);
+  }
+  return output;
+}
+
+function isStandalonePwa() {
+  return (
+    window.matchMedia?.('(display-mode: standalone)')?.matches ||
+    window.navigator.standalone === true
+  );
+}
+
+function initPwaAndPush() {
+  const ua = navigator.userAgent || '';
+  const isMacPanel = /InControlPanel/.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  const isMobile = isIOS || /Android/i.test(ua);
+  const dismissed = (() => {
+    try {
+      return localStorage.getItem('theone_pwa_banner_dismissed') === '1';
+    } catch {
+      return false;
+    }
+  })();
+
+  const banner = $('#pwa-install-banner');
+  const installBtn = $('#btn-pwa-install');
+  const dismissBtn = $('#btn-pwa-dismiss');
+  const bannerSub = $('#pwa-banner-sub');
+
+  dismissBtn?.addEventListener('click', () => {
+    banner?.classList.add('hidden');
+    try {
+      localStorage.setItem('theone_pwa_banner_dismissed', '1');
+    } catch {}
+  });
+
+  if (isIOS && !isStandalonePwa() && !isMacPanel && !dismissed) {
+    banner?.classList.remove('hidden');
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    if (!isMacPanel && !isStandalonePwa() && !dismissed && isMobile) {
+      if (bannerSub) {
+        bannerSub.textContent = 'Install TheOne to your home screen for full-screen mode & background push alerts.';
+      }
+      installBtn?.classList.remove('hidden');
+      banner?.classList.remove('hidden');
+    }
+  });
+
+  installBtn?.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    const choice = await deferredInstallPrompt.userChoice.catch(() => null);
+    if (choice?.outcome === 'accepted') {
+      banner?.classList.add('hidden');
+      toast('TheOne installed to Home Screen');
+    }
+    deferredInstallPrompt = null;
+  });
+
+  // Register Service Worker when supported (HTTPS or localhost)
+  if ('serviceWorker' in navigator && window.isSecureContext && !isMacPanel) {
+    navigator.serviceWorker
+      .register('/sw.js', { scope: '/' })
+      .then(async (reg) => {
+        swRegistration = reg;
+        if ('pushManager' in reg) {
+          const existing = await reg.pushManager.getSubscription().catch(() => null);
+          localPushSubscribed = Boolean(existing);
+        }
+        renderPushStatus();
+      })
+      .catch(() => {
+        renderPushStatus();
+      });
+  }
+
+  $('#btn-toggle-push')?.addEventListener('click', toggleWebPush);
+  $('#btn-test-push')?.addEventListener('click', sendTestWebPush);
+  renderPushStatus();
+}
+
+function renderPushStatus() {
+  const statusEl = $('#push-status-text');
+  const toggleBtn = $('#btn-toggle-push');
+  const testBtn = $('#btn-test-push');
+  const httpsHint = $('#push-https-hint');
+  const menuBadge = $('#push-menu-badge');
+
+  const count = state.webpush?.subscriptionCount || 0;
+  if (menuBadge) {
+    menuBadge.textContent = count > 0 ? `Push (${count})` : 'QR';
+    menuBadge.classList.toggle('active', count > 0);
+  }
+  if (!statusEl || !toggleBtn) return;
+
+  const isSecure = Boolean(window.isSecureContext);
+  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+
+  if (!isSecure) {
+    statusEl.textContent = count > 0
+      ? `${count} device${count === 1 ? '' : 's'} subscribed · HTTPS needed on this browser`
+      : 'Open over HTTPS (Tailscale Serve) to enable background push on this device';
+    toggleBtn.disabled = true;
+    toggleBtn.textContent = 'HTTPS Req';
+    httpsHint?.classList.remove('hidden');
+  } else if (isIOS && !isStandalonePwa()) {
+    statusEl.textContent = 'Add to Home Screen first to enable iOS Push Alerts';
+    toggleBtn.disabled = true;
+    toggleBtn.textContent = 'Add First';
+    httpsHint?.classList.remove('hidden');
+  } else if (!supported) {
+    statusEl.textContent = count > 0
+      ? `${count} phone${count === 1 ? '' : 's'} subscribed for background push`
+      : 'Push API unavailable in this embedded view (open on phone)';
+    toggleBtn.disabled = true;
+    toggleBtn.textContent = 'Phone Only';
+    httpsHint?.classList.add('hidden');
+  } else {
+    httpsHint?.classList.add('hidden');
+    toggleBtn.disabled = false;
+    if (localPushSubscribed) {
+      statusEl.textContent = `Enabled on this device (${Math.max(1, count)} total subscribed)`;
+      toggleBtn.textContent = 'Disable Push';
+      toggleBtn.classList.remove('primary');
+    } else {
+      statusEl.textContent = count > 0
+        ? `${count} other device${count === 1 ? '' : 's'} subscribed · Tap to enable here`
+        : 'Get lock-screen alerts when an agent blocks on approval';
+      toggleBtn.textContent = 'Enable Push';
+      toggleBtn.classList.add('primary');
+    }
+  }
+
+  if (testBtn) {
+    testBtn.disabled = count === 0 && !localPushSubscribed;
+  }
+}
+
+async function toggleWebPush() {
+  if (!window.isSecureContext || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return toast('Web Push requires HTTPS and a supported browser', 3200);
+  }
+  try {
+    const reg = swRegistration || (await navigator.serviceWorker.ready);
+    swRegistration = reg;
+
+    if (localPushSubscribed) {
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await fetch('/api/push/unsubscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        await sub.unsubscribe();
+      }
+      localPushSubscribed = false;
+      renderPushStatus();
+      return toast('Background push alerts disabled');
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      return toast('Notification permission denied in browser settings', 3200);
+    }
+
+    let publicKey = state.webpush?.publicKey;
+    if (!publicKey) {
+      const cfg = await (await fetch('/api/push/config')).json();
+      publicKey = cfg.publicKey;
+    }
+    if (!publicKey) {
+      return toast('Missing VAPID public key from Hub', 3000);
+    }
+
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+    const json = sub.toJSON();
+    const res = await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        endpoint: json.endpoint,
+        keys: json.keys,
+        deviceLabel: `${detectDevice()} PWA`,
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.ok) {
+      return toast(body.error || 'Failed to save push subscription', 3400);
+    }
+    localPushSubscribed = true;
+    if (body.status) state.webpush = body.status;
+    renderPushStatus();
+    toast('Lock-screen Push Alerts enabled!');
+  } catch (err) {
+    toast(err?.message || 'Could not enable Web Push', 3400);
+  }
+}
+
+async function sendTestWebPush() {
+  try {
+    const res = await fetch('/api/push/test', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      return toast(data.error || 'Test push failed', 3200);
+    }
+    toast(`Test push sent to ${data.sent} device${data.sent === 1 ? '' : 's'}`);
+  } catch {
+    toast('Failed to reach Hub for test push', 3000);
+  }
+}
+
+initPwaAndPush();
 connect();

@@ -7,11 +7,98 @@
 
 import Cocoa
 import WebKit
+import Carbon
 
 final class SidePanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 }
+
+final class EdgeHandleView: NSView {
+    var urgentCount: Int = 0 { didSet { needsDisplay = true } }
+    var stayHidden: Bool = false { didSet { needsDisplay = true } }
+    var onOpen: (() -> Void)?
+    var onMovedY: ((CGFloat) -> Void)?
+    private var mouseDownPoint: NSPoint?
+    private var didDrag = false
+
+    override func draw(_ dirtyRect: NSRect) {
+        let rect = bounds.insetBy(dx: 1, dy: 1)
+        let bgPath = NSBezierPath(roundedRect: rect, xRadius: 12, yRadius: 12)
+        NSColor(calibratedRed: 0.055, green: 0.055, blue: 0.075, alpha: 0.92).setFill()
+        bgPath.fill()
+
+        let borderColor = urgentCount > 0
+            ? NSColor(calibratedRed: 0.94, green: 0.28, blue: 0.25, alpha: 0.85)
+            : NSColor(calibratedRed: 0.91, green: 0.77, blue: 0.41, alpha: 0.55)
+        borderColor.setStroke()
+        bgPath.lineWidth = 1.2
+        bgPath.stroke()
+
+        // Draw Forged Gold One Ring & Eye Emblem
+        let cx = bounds.midX
+        let cy = urgentCount > 0 ? bounds.height - 19 : bounds.midY
+        let ringColor = urgentCount > 0
+            ? NSColor(calibratedRed: 1.0, green: 0.42, blue: 0.28, alpha: 1.0)
+            : NSColor(calibratedRed: 0.91, green: 0.77, blue: 0.41, alpha: 0.98)
+
+        let ring = NSBezierPath()
+        ring.appendArc(withCenter: NSPoint(x: cx, y: cy), radius: 7.5, startAngle: 0, endAngle: 360)
+        ring.lineWidth = 2.0
+        ringColor.setStroke()
+        ring.stroke()
+
+        let iris = NSBezierPath(ovalIn: NSRect(x: cx - 1.5, y: cy - 4.4, width: 3.0, height: 8.8))
+        ringColor.setFill()
+        iris.fill()
+
+        let pupil = NSBezierPath(ovalIn: NSRect(x: cx - 0.55, y: cy - 3.0, width: 1.1, height: 6.0))
+        NSColor(calibratedWhite: 0.04, alpha: 1.0).setFill()
+        pupil.fill()
+
+        if urgentCount > 0 {
+            let badgeText = urgentCount > 9 ? "9+" : "\(urgentCount)"
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold),
+                .foregroundColor: NSColor(calibratedRed: 1.0, green: 0.72, blue: 0.70, alpha: 1.0)
+            ]
+            let sz = (badgeText as NSString).size(withAttributes: attrs)
+            (badgeText as NSString).draw(at: NSPoint(x: cx - sz.width / 2, y: 7), withAttributes: attrs)
+        } else if stayHidden {
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 8.5, weight: .semibold),
+                .foregroundColor: NSColor(calibratedRed: 0.91, green: 0.77, blue: 0.41, alpha: 0.75)
+            ]
+            let s = "☾" as NSString
+            let sz = s.size(withAttributes: attrs)
+            s.draw(at: NSPoint(x: cx - sz.width / 2, y: 5), withAttributes: attrs)
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        mouseDownPoint = event.locationInWindow
+        didDrag = false
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let win = window, let start = mouseDownPoint else { return }
+        let dy = event.locationInWindow.y - start.y
+        if abs(dy) > 3 { didDrag = true }
+        var f = win.frame
+        f.origin.y += dy
+        win.setFrame(f, display: true)
+        onMovedY?(f.origin.y)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if !didDrag {
+            onOpen?()
+        }
+    }
+}
+
+private var globalHotKeyHandlerRef: EventHandlerRef?
+private weak var globalHotKeyDelegate: AppDelegate?
 
 final class PanelWebView: WKWebView {
     var lastMouseDownEvent: NSEvent?
@@ -33,21 +120,29 @@ final class PanelWebView: WKWebView {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate {
     var panel: SidePanel!
+    var edgePanel: NSPanel!
+    var edgeHandleView: EdgeHandleView!
+    var edgeHandleY: CGFloat? = nil
     var webView: PanelWebView!
     var statusItem: NSStatusItem!
     var autoMenuItem: NSMenuItem?
+    var stayHiddenMenuItem: NSMenuItem?
     var tileMenuItem: NSMenuItem?
+    var hotKeyRef: EventHotKeyRef?
     let hubURL: URL
     let explicitCliPath: String?
     var panelWidth: CGFloat = 386
     var dockSide: String = "right"
     var popupMode: String = "needs_input"
     var autoPopupOnly: Bool = true
+    var stayHidden: Bool = false
     var autoTileBesidePanel: Bool = true
     var demoMode: Bool = false
     var manuallyShown: Bool = true
     var hadUrgentAction: Bool = false
+    var currentActionCount: Int = 0
     var lastUrgentSignature: String = ""
+    var dismissedSignature: String = ""
     var statePollTimer: Timer?
     var lastHubSpawnAttempt: Date = .distantPast
 
@@ -60,13 +155,99 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         setupPanel()
+        setupEdgeHandle()
         setupStatusItem()
+        registerGlobalHotkey()
         positionDockFrame(animate: false)
-        panel.orderFrontRegardless()
+        showMainPanel()
         startStatePoller()
         NotificationCenter.default.addObserver(
             self, selector: #selector(handleScreenChange),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
+    }
+
+    func showMainPanel() {
+        edgePanel?.orderOut(nil)
+        panel.orderFrontRegardless()
+    }
+
+    func hideMainPanel() {
+        panel.orderOut(nil)
+        positionEdgeHandle()
+        edgeHandleView?.urgentCount = currentActionCount
+        edgeHandleView?.stayHidden = stayHidden
+        edgePanel?.orderFrontRegardless()
+    }
+
+    func setupEdgeHandle() {
+        edgePanel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 32, height: 56),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        edgePanel.isOpaque = false
+        edgePanel.backgroundColor = .clear
+        edgePanel.hasShadow = true
+        edgePanel.level = .floating
+        edgePanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        edgePanel.hidesOnDeactivate = false
+
+        let view = EdgeHandleView(frame: NSRect(x: 0, y: 0, width: 32, height: 56))
+        view.toolTip = "Click to open TheOne (⌥⇧T) · Drag up/down to move"
+        view.onOpen = { [weak self] in
+            guard let self = self else { return }
+            self.stayHidden = false
+            self.stayHiddenMenuItem?.state = .off
+            self.manuallyShown = true
+            self.updateMenuBarBadge(count: self.currentActionCount)
+            self.showMainPanel()
+            self.pollHubState()
+        }
+        view.onMovedY = { [weak self] newY in
+            self?.edgeHandleY = newY
+        }
+        edgePanel.contentView = view
+        self.edgeHandleView = view
+        positionEdgeHandle()
+    }
+
+    func positionEdgeHandle() {
+        guard let edgePanel = edgePanel, let screen = panel.screen ?? NSScreen.main else { return }
+        let f = screen.visibleFrame
+        let w: CGFloat = 32
+        let h: CGFloat = 56
+        let x = dockSide == "left" ? (f.minX + 4) : (f.maxX - w - 4)
+        let defaultY = f.minY + (f.height - h) * 0.55
+        let clampedY = min(max(edgeHandleY ?? defaultY, f.minY + 12), f.maxY - h - 12)
+        edgePanel.setFrame(NSRect(x: x, y: clampedY, width: w, height: h), display: true)
+    }
+
+    func registerGlobalHotkey() {
+        // Option + Shift + T toggles TheOne from anywhere (works with zero Accessibility permissions)
+        globalHotKeyDelegate = self
+        var eventSpec = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+        let status = InstallEventHandler(
+            GetApplicationEventTarget(),
+            { _, _, _ in
+                DispatchQueue.main.async {
+                    globalHotKeyDelegate?.togglePanel()
+                }
+                return noErr
+            },
+            1,
+            &eventSpec,
+            nil,
+            &globalHotKeyHandlerRef
+        )
+        if status == noErr {
+            let hotKeyID = EventHotKeyID(signature: OSType(0x54484F4E), id: 1) // 'THON'
+            // kVK_ANSI_T = 17
+            RegisterEventHotKey(UInt32(kVK_ANSI_T), UInt32(optionKey | shiftKey), hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
+        }
     }
 
     /// Native loopback poller so auto-popup works instantaneously even while WKWebView is hidden (ordered out).
@@ -118,36 +299,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                     self.autoPopupOnly = shouldAutoOnly
                     self.autoMenuItem?.state = shouldAutoOnly ? .on : .off
                 }
-                if !shouldAutoOnly && !self.panel.isVisible {
-                    self.panel.orderFrontRegardless()
+                if !shouldAutoOnly && !self.panel.isVisible && !self.stayHidden {
+                    self.showMainPanel()
                 }
                 self.applyUrgentState(count: actionCount, signature: signature)
             }
         }.resume()
     }
 
+    func updateMenuBarBadge(count: Int) {
+        currentActionCount = count
+        statusItem.button?.image = makeMenuBarIcon(urgent: count > 0)
+        if count > 0 {
+            statusItem.button?.title = stayHidden ? " \(count)☾" : " \(count)"
+        } else {
+            statusItem.button?.title = stayHidden ? " ☾" : ""
+        }
+        statusItem.button?.toolTip = stayHidden
+            ? "TheOne (Stay Hidden — click to reopen)"
+            : (count > 0 ? "TheOne — \(count) agent\(count == 1 ? "" : "s") need attention" : "TheOne — AI Agent Mission Control")
+        edgeHandleView?.urgentCount = count
+        edgeHandleView?.stayHidden = stayHidden
+    }
+
     func applyUrgentState(count: Int, signature: String) {
         if count > 0 {
             let isNewRequest = !hadUrgentAction || (!signature.isEmpty && signature != lastUrgentSignature)
-            statusItem.button?.image = makeMenuBarIcon(urgent: true)
-            statusItem.button?.title = " \(count) TheOne"
+            let isDismissed = !signature.isEmpty && signature == dismissedSignature
+            updateMenuBarBadge(count: count)
             hadUrgentAction = true
             if !signature.isEmpty {
                 lastUrgentSignature = signature
             }
-            if !panel.isVisible || isNewRequest {
-                panel.orderFrontRegardless()
+            if !stayHidden && isNewRequest && !isDismissed {
+                showMainPanel()
             }
         } else {
-            statusItem.button?.image = makeMenuBarIcon(urgent: false)
-            statusItem.button?.title = " TheOne"
+            updateMenuBarBadge(count: 0)
             if hadUrgentAction {
                 hadUrgentAction = false
                 lastUrgentSignature = ""
+                dismissedSignature = ""
                 manuallyShown = false
             }
             if autoPopupOnly && !manuallyShown && panel.isVisible {
-                panel.orderOut(nil)
+                hideMainPanel()
             }
         }
     }
@@ -444,12 +640,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
     @objc func handleScreenChange() {
         positionDockFrame(animate: false)
+        positionEdgeHandle()
     }
 
     @objc func dock() {
         positionDockFrame(animate: true)
         manuallyShown = true
-        panel.orderFrontRegardless()
+        stayHidden = false
+        stayHiddenMenuItem?.state = .off
+        showMainPanel()
         if autoTileBesidePanel {
             fitActiveWindowBesidePanel()
         }
@@ -498,10 +697,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
     func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.autosaveName = "TheOneStatusItem"
         statusItem.button?.image = makeMenuBarIcon(urgent: false)
         statusItem.button?.imagePosition = .imageLeading
-        statusItem.button?.title = " TheOne"
+        statusItem.button?.title = ""
+        statusItem.button?.toolTip = "TheOne — AI Agent Mission Control"
         let menu = NSMenu()
+        let titleHeader = NSMenuItem(title: "TheOne", action: nil, keyEquivalent: "")
+        titleHeader.isEnabled = false
+        menu.addItem(titleHeader)
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Show / Hide Panel", action: #selector(togglePanel), keyEquivalent: "i")
         let autoItem = NSMenuItem(
             title: "Only Pop Up When Action Needed",
@@ -511,6 +716,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         autoItem.state = autoPopupOnly ? .on : .off
         self.autoMenuItem = autoItem
         menu.addItem(autoItem)
+        let stayItem = NSMenuItem(
+            title: "Stay Hidden (Mute Auto-Popup)",
+            action: #selector(toggleStayHidden(_:)),
+            keyEquivalent: "m"
+        )
+        stayItem.state = stayHidden ? .on : .off
+        self.stayHiddenMenuItem = stayItem
+        menu.addItem(stayItem)
         menu.addItem(withTitle: "Snap to Screen Edge", action: #selector(dock), keyEquivalent: "d")
         menu.addItem(withTitle: "Fit Active Window Beside Panel", action: #selector(fitActiveWindowBesidePanel), keyEquivalent: "f")
         let tileItem = NSMenuItem(
@@ -535,11 +748,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     @objc func togglePanel() {
         if panel.isVisible {
             manuallyShown = false
-            panel.orderOut(nil)
+            dismissedSignature = lastUrgentSignature
+            hideMainPanel()
+        } else {
+            stayHidden = false
+            stayHiddenMenuItem?.state = .off
+            manuallyShown = true
+            updateMenuBarBadge(count: currentActionCount)
+            showMainPanel()
+            pollHubState()
+        }
+    }
+
+    @objc func toggleStayHidden(_ sender: NSMenuItem) {
+        stayHidden.toggle()
+        sender.state = stayHidden ? .on : .off
+        if stayHidden {
+            manuallyShown = false
+            dismissedSignature = lastUrgentSignature
+            hideMainPanel()
         } else {
             manuallyShown = true
-            panel.orderFrontRegardless()
+            showMainPanel()
         }
+        pollHubState()
     }
 
     @objc func toggleAutoPopup(_ sender: NSMenuItem) {
@@ -547,9 +779,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         sender.state = autoPopupOnly ? .on : .off
         if autoPopupOnly && !hadUrgentAction {
             manuallyShown = false
-            panel.orderOut(nil)
-        } else if !autoPopupOnly && !panel.isVisible {
-            panel.orderFrontRegardless()
+            hideMainPanel()
+        } else if !autoPopupOnly && !panel.isVisible && !stayHidden {
+            showMainPanel()
         }
     }
 
@@ -582,15 +814,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                 if shouldAutoOnly != autoPopupOnly {
                     autoPopupOnly = shouldAutoOnly
                     autoMenuItem?.state = autoPopupOnly ? .on : .off
-                    if !autoPopupOnly && !panel.isVisible {
-                        panel.orderFrontRegardless()
+                    if !autoPopupOnly && !panel.isVisible && !stayHidden {
+                        showMainPanel()
                     } else if autoPopupOnly && !hadUrgentAction && !manuallyShown && panel.isVisible {
-                        panel.orderOut(nil)
+                        hideMainPanel()
                     }
                 }
             }
             if geometryChanged {
                 positionDockFrame(animate: true)
+                positionEdgeHandle()
             }
             return
         }
@@ -607,7 +840,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                 fitActiveWindowBesidePanel()
             } else if cmd == "hide" {
                 manuallyShown = false
-                panel.orderOut(nil)
+                dismissedSignature = lastUrgentSignature
+                hideMainPanel()
+            } else if cmd == "stay_hidden" {
+                stayHidden = true
+                stayHiddenMenuItem?.state = .on
+                manuallyShown = false
+                dismissedSignature = lastUrgentSignature
+                hideMainPanel()
+                pollHubState()
             } else if let event = webView.lastMouseDownEvent ?? NSApp.currentEvent {
                 panel.performDrag(with: event)
                 snapIfNearScreenEdge()
@@ -622,8 +863,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         } else if demoMode {
             applyUrgentState(count: 0, signature: "")
         } else if !hadUrgentAction {
-            statusItem.button?.image = makeMenuBarIcon(urgent: false)
-            statusItem.button?.title = " TheOne"
+            updateMenuBarBadge(count: 0)
         }
     }
 }

@@ -49,6 +49,7 @@ import {
   handleVoiceRespond,
 } from './voice.js';
 import { createHomeKitBridge } from './homekit.js';
+import { createWebPushManager } from './webpush.js';
 import {
   loadOrCreateToken,
   checkOrigin,
@@ -67,6 +68,8 @@ const PUBLIC_ASSETS = new Set([
   '/homeview.css',
   '/homeview.js',
   '/icon.svg',
+  '/apple-touch-icon.png',
+  '/sw.js',
 ]);
 
 const __filename = fileURLToPath(import.meta.url);
@@ -152,6 +155,10 @@ export async function createInControlHub(options = {}) {
     store,
     () => network.tailscalePairingUrl || network.pairingUrl
   );
+  const webpush = createWebPushManager(store, {
+    fetchFn: options.pushFetch || globalThis.fetch,
+    allowLoopbackEndpoint: Boolean(options.allowLoopbackPush),
+  });
   const allowedHosts = buildAllowedHosts(network, options.allowedHosts || []);
   // The QR code carries the pairing token so scanning it pairs the device in one step.
   const qrSvg = await QRCode.toString(network.pairingUrl, {
@@ -215,7 +222,30 @@ export async function createInControlHub(options = {}) {
     try {
       // 1. GET /api/state — Full state snapshot
       if (req.method === 'GET' && pathname === '/api/state') {
-        return sendJson(res, 200, buildFullState(store, network, qrSvg, homekit));
+        return sendJson(res, 200, buildFullState(store, network, qrSvg, homekit, webpush));
+      }
+
+      // 1b. Web Push (PWA background notifications for iOS 16.4+ & Android/Desktop)
+      if (req.method === 'GET' && pathname === '/api/push/config') {
+        return sendJson(res, 200, { ok: true, ...webpush.getPublicStatus() });
+      }
+      if (req.method === 'POST' && pathname === '/api/push/subscribe') {
+        const body = await readJsonBody(req);
+        const result = webpush.subscribe(body);
+        if (result.ok) {
+          broadcast({ type: 'state_sync', state: buildFullState(store, network, qrSvg, homekit, webpush) });
+        }
+        return sendJson(res, result.ok ? 200 : 400, result);
+      }
+      if (req.method === 'POST' && pathname === '/api/push/unsubscribe') {
+        const body = await readJsonBody(req);
+        const result = webpush.unsubscribe(body.endpoint);
+        broadcast({ type: 'state_sync', state: buildFullState(store, network, qrSvg, homekit, webpush) });
+        return sendJson(res, 200, result);
+      }
+      if (req.method === 'POST' && pathname === '/api/push/test') {
+        const result = await webpush.sendTestNotification();
+        return sendJson(res, result.ok ? 200 : 400, result);
       }
 
       // 2. POST /api/agents/event — Register or update agent state
@@ -585,10 +615,14 @@ export async function createInControlHub(options = {}) {
 
       if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
         const ext = path.extname(filePath).toLowerCase();
-        res.writeHead(200, {
+        const headers = {
           'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
           'Cache-Control': 'no-cache',
-        });
+        };
+        if (pathname === '/sw.js') {
+          headers['Service-Worker-Allowed'] = '/';
+        }
+        res.writeHead(200, headers);
         fs.createReadStream(filePath).pipe(res);
         return;
       }
@@ -625,7 +659,7 @@ export async function createInControlHub(options = {}) {
     broadcast({
       type: 'state_sync',
       changeEvent,
-      state: buildFullState(store, network, qrSvg, homekit),
+      state: buildFullState(store, network, qrSvg, homekit, webpush),
     });
   });
 
@@ -646,7 +680,7 @@ export async function createInControlHub(options = {}) {
     ws.send(
       JSON.stringify({
         type: 'state_sync',
-        state: buildFullState(store, network, qrSvg, homekit),
+        state: buildFullState(store, network, qrSvg, homekit, webpush),
       })
     );
 
@@ -676,12 +710,14 @@ export async function createInControlHub(options = {}) {
     store,
     network,
     homekit,
+    webpush,
     port,
     token,
     close: async () => {
       stopAutoWatcher();
       stopAutoContextSync();
       stopWhatsApp();
+      webpush.stop();
       await homekit.stop();
       wss.close();
       await new Promise((resolve) => server.close(() => resolve()));
@@ -703,13 +739,14 @@ function summarizeHomeKit(homekit) {
   };
 }
 
-function buildFullState(store, network, qrSvg, homekit) {
+function buildFullState(store, network, qrSvg, homekit, webpush = null) {
   return {
     agents: store.getSortedAgents(),
     counts: store.getSummaryCounts(),
     integrations: getIntegrationsStatus(),
     whatsapp: getPublicWhatsAppStatus(),
     homekit: summarizeHomeKit(homekit),
+    webpush: webpush ? webpush.getPublicStatus() : null,
     settings: getPublicUserSettings(),
     network,
     qrSvg,

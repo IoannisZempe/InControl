@@ -848,6 +848,96 @@ html.macos-panel .panel-only-btn {
   color: var(--cta-fg);
 }
 
+/* Idle Card "Send a message" Button & Expanded Composer Area */
+.idle-message-bar {
+  margin-top: 7px;
+  padding-left: 30px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-send-msg-idle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--text);
+  background: rgba(232, 196, 104, 0.10);
+  border: 1px solid rgba(232, 196, 104, 0.34);
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.btn-send-msg-idle:hover {
+  background: rgba(232, 196, 104, 0.20);
+  border-color: rgba(232, 196, 104, 0.65);
+  color: #fff6d6;
+}
+
+.reply-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 7px;
+  padding-left: 30px;
+}
+
+.reply-textarea {
+  width: 100%;
+  min-height: 62px;
+  max-height: 160px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.38);
+  border: 1px solid var(--rim-border-strong);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.4;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+}
+
+.reply-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.reply-textarea:focus {
+  background: rgba(0, 0, 0, 0.52);
+  border-color: rgba(232, 196, 104, 0.65);
+  box-shadow: 0 0 0 2px rgba(232, 196, 104, 0.18);
+}
+
+.reply-composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.reply-cancel {
+  height: 26px;
+  padding: 0 9px;
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--rim-border);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.reply-cancel:hover {
+  color: var(--text);
+  border-color: var(--rim-border-strong);
+}
+
 /* Attention banner */
 .attention-bar {
   margin-top: 8px;
@@ -1901,4 +1991,100 @@ html.macos-panel .panel-only-btn {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Mobile PWA Install Banner & Web Push Card */
+.pwa-install-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 10px 0;
+  padding: 9px 11px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(232, 196, 104, 0.14), rgba(12, 12, 16, 0.92));
+  border: 1px solid rgba(232, 196, 104, 0.42);
+}
+
+.pwa-banner-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  border: 1px solid rgba(232, 196, 104, 0.4);
+}
+
+.pwa-banner-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.pwa-banner-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: #fff6d6;
+}
+
+.pwa-banner-sub {
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.pwa-install-btn {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #fff6d6, #e8c468);
+  color: #09090b;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.pwa-dismiss-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.pwa-push-card {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--rim-border);
+}
+
+.pwa-push-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pwa-push-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pwa-push-sub {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.pwa-push-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 

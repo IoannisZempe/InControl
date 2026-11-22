@@ -16,6 +16,14 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { AgentStore } from '../src/server/store.js';
 import { executeCustomFunction, saveUserSettings } from '../src/server/settings.js';
+import { presentedToken, isAuthorized, safeEqual } from '../src/server/auth.js';
+import {
+  generateVapidKeys,
+  createVapidAuthHeader,
+  encryptWebPushPayload,
+  validatePushEndpoint,
+} from '../src/server/webpush.js';
+import crypto from 'node:crypto';
 
 const execFileAsync = promisify(execFile);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -412,4 +420,312 @@ test('unit: ChatGPT/Codex watcher detects option approvals, resets completed ste
   } finally {
     fs.rmSync(fakeHome, { recursive: true, force: true });
   }
+});
+
+test('unit: focusAgentWindow deep-links ChatGPT threads, opens Cursor workspaces, and handles AX denial cleanly', async () => {
+  const { focusAgentWindow } = await import('../src/server/macos-focus.js');
+
+  const calls = [];
+  const fakeExec = (cmd, args, _opts, cb) => {
+    calls.push({ cmd, args });
+    if (cmd === 'osascript') {
+      return cb(null, 'AX_DENIED:Antigravity', '');
+    }
+    return cb(null, '', '');
+  };
+
+  // 1. ChatGPT / Codex deep link routes directly to exact thread ID without Accessibility
+  const codexFocus = await focusAgentWindow(
+    {
+      id: 'codex-gymw',
+      ide: 'ChatGPT App',
+      provider: 'codex',
+      projectName: 'GymW',
+      metadata: { threadId: '01a1b689-eab3-7743-ae1e-0fcfc33c766a' },
+    },
+    { platform: 'darwin', execFileFn: fakeExec }
+  );
+  assert.equal(codexFocus.ok, true);
+  assert.equal(codexFocus.deepLinked, true);
+  assert.equal(codexFocus.exactTarget, true);
+  assert.equal(calls[0].cmd, 'open');
+  assert.equal(calls[0].args[0], 'codex://threads/01a1b689-eab3-7743-ae1e-0fcfc33c766a');
+
+  // 2. Cursor with existing workspace focuses folder window directly without Accessibility
+  calls.length = 0;
+  const cursorFocus = await focusAgentWindow(
+    {
+      id: 'cursor-demo',
+      ide: 'Cursor',
+      provider: 'cursor',
+      projectName: 'InControl',
+      workspace: '/Users/demo/Repo/InControl',
+    },
+    { platform: 'darwin', execFileFn: fakeExec, existsSyncFn: () => true }
+  );
+  assert.equal(cursorFocus.ok, true);
+  assert.equal(cursorFocus.exactTarget, true);
+  assert.equal(calls[0].cmd, 'open');
+  assert.deepEqual(calls[0].args, ['-a', 'Cursor', '/Users/demo/Repo/InControl']);
+
+  // 3. Antigravity activates app even when Accessibility (System Events) is denied, reporting honest status
+  calls.length = 0;
+  const agyFocus = await focusAgentWindow(
+    {
+      id: 'agy-1',
+      ide: 'Antigravity',
+      provider: 'antigravity',
+      projectName: 'InControl',
+      workspace: '/Users/demo/Repo/InControl',
+    },
+    { platform: 'darwin', execFileFn: fakeExec }
+  );
+  assert.equal(agyFocus.ok, true);
+  assert.equal(agyFocus.appName, 'Antigravity');
+  assert.equal(agyFocus.needsAccessibility, true);
+  assert.equal(agyFocus.exactTarget, false);
+  assert.equal(calls[0].cmd, 'open');
+  assert.deepEqual(calls[0].args, ['-a', 'Antigravity']);
+});
+
+test('unit: scanAntigravitySessions expires 25h-old Needs Review cards and prunes >12h idle ghost cards', async () => {
+  const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'incontrol-unit-stale-agy-'));
+  fs.mkdirSync(path.join(fakeHome, '.gemini', 'antigravity', 'brain'), { recursive: true });
+
+  const script = `
+    import assert from 'node:assert/strict';
+    import { AgentStore } from './src/server/store.js';
+    import { scanAntigravitySessions } from './src/connectors/auto-watcher.js';
+
+    const store = new AgentStore();
+    const now = Date.now();
+    store.upsertAgent({
+      id: 'agy-stale20m',
+      name: 'Antigravity',
+      provider: 'antigravity',
+      ide: 'Antigravity',
+      status: 'needs_attention',
+      currentStep: 'Turn complete — ready for review',
+      attentionReason: 'Old turn',
+      updatedAt: now - 20 * 60_000,
+    });
+    store.upsertAgent({
+      id: 'agy-stale25h',
+      name: 'Antigravity',
+      provider: 'antigravity',
+      ide: 'Antigravity',
+      status: 'needs_attention',
+      currentStep: 'Turn complete — ready for review',
+      updatedAt: now - 25 * 3600_000,
+    });
+    store.upsertAgent({
+      id: 'agy-idle20h',
+      name: 'Antigravity',
+      provider: 'antigravity',
+      ide: 'Antigravity',
+      status: 'idle',
+      currentStep: 'Idle',
+      updatedAt: now - 20 * 3600_000,
+    });
+
+    scanAntigravitySessions(store, new Map(), new Set());
+
+    // 20m-old review card demotes to idle; >12h cards are expired/pruned cleanly
+    assert.equal(store.agents.get('agy-stale20m')?.status, 'idle');
+    assert.equal(store.agents.get('agy-stale20m')?.attentionReason, null);
+    assert.equal(store.agents.get('agy-stale25h')?.status, 'idle');
+    assert.equal(store.agents.has('agy-idle20h'), false);
+  `;
+
+  try {
+    await execFileAsync(process.execPath, ['--input-type=module', '-e', script], {
+      cwd: ROOT,
+      env: { ...process.env, HOME: fakeHome, INCONTROL_HOME: path.join(fakeHome, '.incontrol') },
+    });
+  } finally {
+    fs.rmSync(fakeHome, { recursive: true, force: true });
+  }
+});
+
+test('unit: TheOne branding, icons, demo media, and CLI alias stay consistent', () => {
+  // WHY: Prevents regressions where UI, macOS menu bar, PWA manifest, or README drift back
+  // to stale branding or broken icon/demo links.
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  assert.equal(pkg.bin.theone, './bin/incontrol.js');
+  assert.equal(pkg.bin.incontrol, './bin/incontrol.js');
+  assert.equal(pkg.bin['incontrol-agents'], './bin/incontrol.js');
+
+  const indexHtml = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8');
+  assert.match(indexHtml, /<title>TheOne<\/title>/);
+  assert.match(indexHtml, /<span class="brand-title">TheOne<\/span>/);
+  assert.match(indexHtml, /apple-touch-icon\.png/);
+  assert.match(indexHtml, /The One Ring & Eye/);
+
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/manifest.json'), 'utf8'));
+  assert.equal(manifest.short_name, 'TheOne');
+  assert.match(manifest.name, /^TheOne/);
+
+  const homeviewHtml = fs.readFileSync(path.join(ROOT, 'public/homeview.html'), 'utf8');
+  assert.match(homeviewHtml, /<title>TheOne · Apple HomeView<\/title>/);
+  assert.match(homeviewHtml, /apple-touch-icon\.png/);
+
+  const appJs = fs.readFileSync(path.join(ROOT, 'public/app.js'), 'utf8');
+  assert.match(appJs, /TheOne/);
+
+  const swiftPanel = fs.readFileSync(path.join(ROOT, 'macos/InControlPanel.swift'), 'utf8');
+  assert.match(swiftPanel, /TheOneStatusItem/);
+  assert.match(swiftPanel, /The One Ring & Eye/);
+  assert.match(swiftPanel, /var stayHidden: Bool/);
+  assert.match(swiftPanel, /cmd == "stay_hidden"/);
+  assert.match(swiftPanel, /dismissedSignature/);
+  assert.match(indexHtml, /id="btn-close-stay-hidden"/);
+
+  // Verify Forged Gold SVG icon and binary PNG/GIF/MP4 headers
+  const iconSvg = fs.readFileSync(path.join(ROOT, 'public/icon.svg'), 'utf8');
+  assert.match(iconSvg, /#E8C468/i);
+
+  const touchPng = fs.readFileSync(path.join(ROOT, 'public/apple-touch-icon.png'));
+  assert.equal(touchPng.subarray(0, 4).toString('hex'), '89504e47', 'apple-touch-icon.png must be a valid PNG');
+
+  const demoGif = fs.readFileSync(path.join(ROOT, 'docs/demo.gif'));
+  assert.match(demoGif.subarray(0, 6).toString('ascii'), /^GIF8[79]a$/, 'docs/demo.gif must be a valid GIF');
+
+  const demoMp4 = fs.readFileSync(path.join(ROOT, 'docs/demo.mp4'));
+  assert.equal(demoMp4.subarray(4, 8).toString('ascii'), 'ftyp', 'docs/demo.mp4 must be a valid MP4 container');
+
+  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  assert.match(readme, /<h1 align="center">TheOne<\/h1>/);
+  assert.match(readme, /docs\/demo\.gif/);
+  assert.match(readme, /--gate-bash/);
+  assert.match(readme, /Platform Scope/);
+});
+
+test('unit: mobile Bearer token & QR query pairing auth guards', () => {
+  // WHY: Native iOS / mobile clients connect over LAN or Tailscale using Authorization: Bearer
+  // on REST calls and ?token= on WebSocket upgrades; auth must reject forged or missing tokens.
+  const secret = 'test-mobile-192bit-token-xyz';
+  const urlNoToken = new URL('http://192.168.1.42:4747/api/state');
+  const urlWithToken = new URL(`http://192.168.1.42:4747/ws?token=${secret}`);
+
+  const lanBearerReq = {
+    headers: { authorization: `Bearer ${secret}` },
+    socket: { remoteAddress: '192.168.1.99' },
+  };
+  assert.equal(presentedToken(lanBearerReq, urlNoToken), secret);
+  assert.equal(isAuthorized(lanBearerReq, urlNoToken, secret, { requireLocal: true }), true);
+
+  const wsQueryReq = {
+    headers: {},
+    socket: { remoteAddress: '100.64.0.12' },
+  };
+  assert.equal(presentedToken(wsQueryReq, urlWithToken), secret);
+  assert.equal(isAuthorized(wsQueryReq, urlWithToken, secret, { requireLocal: true }), true);
+
+  const badBearerReq = {
+    headers: { authorization: 'Bearer wrong-token' },
+    socket: { remoteAddress: '192.168.1.99' },
+  };
+  assert.equal(isAuthorized(badBearerReq, urlNoToken, secret, { requireLocal: true }), false);
+  assert.equal(safeEqual(secret, 'short'), false);
+});
+
+test('unit: native iOS SwiftUI project (ios/TheOne) has valid manifest, icons, and sources', () => {
+  const iosRoot = path.join(ROOT, 'ios');
+  const expectedFiles = [
+    'TheOne.xcodeproj/project.pbxproj',
+    'TheOne.xcodeproj/xcshareddata/xcschemes/TheOne.xcscheme',
+    'TheOne/Info.plist',
+    'TheOne/TheOneApp.swift',
+    'TheOne/ContentView.swift',
+    'TheOne/HubClient.swift',
+    'TheOne/Models.swift',
+    'TheOne/TheOneLogoView.swift',
+    'TheOne/NotificationManager.swift',
+    'TheOne/QRScannerView.swift',
+    'TheOne/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png',
+  ];
+  for (const rel of expectedFiles) {
+    assert.equal(fs.existsSync(path.join(iosRoot, rel)), true, `Missing iOS project file: ${rel}`);
+  }
+  const appIcon = fs.readFileSync(path.join(iosRoot, 'TheOne/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png'));
+  assert.equal(appIcon.subarray(0, 4).toString('hex'), '89504e47', 'AppIcon-1024.png must be a valid PNG');
+  const plist = fs.readFileSync(path.join(iosRoot, 'TheOne/Info.plist'), 'utf8');
+  assert.match(plist, /NSCameraUsageDescription/);
+  assert.match(plist, /NSLocalNetworkUsageDescription/);
+});
+
+test('unit: Web Push VAPID ES256 JWT, RFC 8291 aes128gcm round-trip decryption, and SSRF guards', () => {
+  // WHY: Zero-dependency Web Push must produce valid RFC 8292 VAPID JWTs and RFC 8291 aes128gcm
+  // ciphertexts that Apple (web.push.apple.com) & Chrome/Firefox can decrypt, while blocking SSRF.
+  const vapid = generateVapidKeys();
+  const endpoint = 'https://web.push.apple.com/QBS1234567890';
+  const { jwt, authorization } = createVapidAuthHeader({
+    endpoint,
+    publicKey: vapid.publicKey,
+    privateKey: vapid.privateKey,
+  });
+  assert.match(authorization, /^vapid t=[^,]+, k=/);
+
+  // Verify ES256 signature on the JWT with the uncompressed VAPID public key
+  const [hdrB64, payB64, sigB64] = jwt.split('.');
+  const claims = JSON.parse(Buffer.from(payB64, 'base64url').toString('utf8'));
+  assert.equal(claims.aud, 'https://web.push.apple.com');
+  const pubRaw = Buffer.from(vapid.publicKey, 'base64url');
+  const pubKeyObj = crypto.createPublicKey({
+    key: {
+      kty: 'EC',
+      crv: 'P-256',
+      x: pubRaw.subarray(1, 33).toString('base64url'),
+      y: pubRaw.subarray(33, 65).toString('base64url'),
+    },
+    format: 'jwk',
+  });
+  const sigValid = crypto.verify(
+    'sha256',
+    Buffer.from(`${hdrB64}.${payB64}`),
+    { key: pubKeyObj, dsaEncoding: 'ieee-p1363' },
+    Buffer.from(sigB64, 'base64url')
+  );
+  assert.equal(sigValid, true, 'VAPID ES256 JWT signature must verify cleanly');
+
+  // Simulate subscriber (iPhone PWA) ECDH keypair + 16-byte auth secret and decrypt our ciphertext
+  const uaEcdh = crypto.createECDH('prime256v1');
+  uaEcdh.generateKeys();
+  const uaPublic = uaEcdh.getPublicKey();
+  const authSecret = crypto.randomBytes(16);
+
+  const original = JSON.stringify({ title: 'payments-api · Needs Input', body: '$ npx prisma migrate dev' });
+  const packet = encryptWebPushPayload(original, {
+    p256dh: uaPublic.toString('base64url'),
+    auth: authSecret.toString('base64url'),
+  });
+
+  // Parse RFC 8188 header: salt(16) || rs(4) || idlen(1) || asPublic(65) || ciphertext || tag(16)
+  const salt = packet.subarray(0, 16);
+  const rs = packet.readUInt32BE(16);
+  const idlen = packet[20];
+  assert.equal(rs, 4096);
+  assert.equal(idlen, 65);
+  const asPublic = packet.subarray(21, 21 + 65);
+  const ciphertext = packet.subarray(86, packet.length - 16);
+  const tag = packet.subarray(packet.length - 16);
+
+  const shared = uaEcdh.computeSecret(asPublic);
+  const keyInfo = Buffer.concat([Buffer.from('WebPush: info\0', 'utf8'), uaPublic, asPublic]);
+  const ikm = Buffer.from(crypto.hkdfSync('sha256', shared, authSecret, keyInfo, 32));
+  const cek = Buffer.from(crypto.hkdfSync('sha256', ikm, salt, Buffer.from('Content-Encoding: aes128gcm\0', 'utf8'), 16));
+  const nonce = Buffer.from(crypto.hkdfSync('sha256', ikm, salt, Buffer.from('Content-Encoding: nonce\0', 'utf8'), 12));
+
+  const decipher = crypto.createDecipheriv('aes-128-gcm', cek, nonce);
+  decipher.setAuthTag(tag);
+  const decryptedRecord = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  assert.equal(decryptedRecord[decryptedRecord.length - 1], 0x02, 'Final RFC 8188 delimiter must be 0x02');
+  assert.equal(decryptedRecord.subarray(0, -1).toString('utf8'), original);
+
+  // SSRF endpoint validation guards
+  assert.equal(validatePushEndpoint('https://web.push.apple.com/abc').ok, true);
+  assert.equal(validatePushEndpoint('http://web.push.apple.com/abc').ok, false);
+  assert.equal(validatePushEndpoint('https://169.254.169.254/latest/meta-data').ok, false);
+  assert.equal(validatePushEndpoint('https://192.168.1.5/hook').ok, false);
+  assert.equal(validatePushEndpoint('https://127.0.0.1:4747/api/state').ok, false);
 });
