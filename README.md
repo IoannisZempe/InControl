@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/IoannisZempe/InControl/actions/workflows/ci.yml"><img src="https://github.com/IoannisZempe/InControl/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://www.npmjs.com/package/incontrol-agents"><img src="https://img.shields.io/npm/v/incontrol-agents?color=e8c468&style=flat&labelColor=0c0c0f" alt="npm version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-FSL--1.1--MIT-e8c468?style=flat&labelColor=0c0c0f" alt="License: FSL-1.1-MIT" /></a>
   <img src="https://img.shields.io/badge/Runtime-Local--First-22c55e?style=flat&labelColor=0c0c0f" alt="Local-First" />
   <img src="https://img.shields.io/badge/Platforms-macOS%20%7C%20Linux%20%7C%20WSL-f5f5f7?style=flat&labelColor=0c0c0f" alt="Platforms: macOS | Linux | WSL" />

@@ -32,9 +32,9 @@
     "./sdk": "./src/sdk/index.js"
   },
   "bin": {
-    "theone": "./bin/incontrol.js",
-    "incontrol": "./bin/incontrol.js",
-    "incontrol-agents": "./bin/incontrol.js"
+    "theone": "bin/incontrol.js",
+    "incontrol": "bin/incontrol.js",
+    "incontrol-agents": "bin/incontrol.js"
   },
   "scripts": {
     "start": "node ./bin/incontrol.js start",

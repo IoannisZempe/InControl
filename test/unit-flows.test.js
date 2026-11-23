@@ -564,9 +564,9 @@ test('unit: TheOne branding, icons, demo media, and CLI alias stay consistent', 
   // WHY: Prevents regressions where UI, macOS menu bar, PWA manifest, or README drift back
   // to stale branding or broken icon/demo links.
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  assert.equal(pkg.bin.theone, './bin/incontrol.js');
-  assert.equal(pkg.bin.incontrol, './bin/incontrol.js');
-  assert.equal(pkg.bin['incontrol-agents'], './bin/incontrol.js');
+  assert.equal(pkg.bin.theone, 'bin/incontrol.js');
+  assert.equal(pkg.bin.incontrol, 'bin/incontrol.js');
+  assert.equal(pkg.bin['incontrol-agents'], 'bin/incontrol.js');
 
   const indexHtml = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8');
   assert.match(indexHtml, /<title>TheOne<\/title>/);
