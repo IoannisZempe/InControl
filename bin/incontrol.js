@@ -298,6 +298,31 @@ Keep this secret — anyone with it can answer your agents.`);
       break;
     }
 
+    case 'demo': {
+      const { runInteractiveDemo } = await import('../src/connectors/demo.js');
+      const res = await runInteractiveDemo({
+        port: flag('--port') || 4747,
+        panel: args.includes('--panel'),
+        localOnly: args.includes('--local-only'),
+        noNotify: args.includes('--no-notify'),
+        noQr: args.includes('--no-qr'),
+        once: args.includes('--once'),
+        strict: args.includes('--strict'),
+        rootDir: ROOT,
+        cliPath: BIN_PATH,
+      });
+      if (res.hub && !args.includes('--once')) {
+        console.log('  Hub is still running so you can keep exploring the UI. Press Ctrl+C to stop.');
+        const shutdown = async () => {
+          await res.hub.close();
+          process.exit(0);
+        };
+        process.on('SIGINT', shutdown);
+        process.on('SIGTERM', shutdown);
+      }
+      break;
+    }
+
     default:
       console.log(`InControl v${getPackageVersion(ROOT)} — mission control side panel for AI agents
 
@@ -305,6 +330,7 @@ Usage:
   incontrol start [--port 4747] [--panel] [--no-notify]            Start the hub + web UI
         [--local-only]   bind to 127.0.0.1 (no phone access)
         [--strict]       require the token even from localhost
+  incontrol demo [--port 4747] [--panel] [--once]                  Run a 20s interactive approval demo + QR
   incontrol panel [--port 4747]                                    Open the native macOS side panel
   incontrol service <install|status|restart|uninstall>             Manage macOS background LaunchAgents
   incontrol token [--rotate]                                       Show / rotate the device pairing token

@@ -27,6 +27,12 @@
 
 ## 30-Second Quick Start
 
+**0. Try the 20-Second Zero-Setup Demo (prints a live phone QR code + simulated Bash gate):**
+
+```bash
+npx incontrol-agents demo
+```
+
 **1. Start the Local Hub + Web & Phone UI (`macOS`, `Linux`, `WSL` — Node >= 20):**
 
 ```bash

@@ -90,6 +90,7 @@ export class InControlAgent {
         details: extra.details || null,
         options: formattedOptions,
         allowFreeText: extra.allowFreeText !== false,
+        ...(Number.isFinite(extra.timeoutMs) ? { timeoutMs: extra.timeoutMs } : {}),
       }),
     });
     return res.json();

@@ -1300,3 +1300,70 @@ test('flow: Antigravity sidecar bridge delivers TheOne/panel messages immediatel
     await hub.close();
   }
 });
+
+test('flow: 20-second interactive demo seeds 3 lanes, blocks on Bash gate, and resolves on remote Approve', async () => {
+  const { runInteractiveDemo } = await import('../src/connectors/demo.js');
+  const hub = await createInControlHub({
+    port: 0,
+    macNotifications: false,
+    autoWatch: false,
+    homekit: false,
+  });
+  const port = hub.server.address().port;
+  const base = `http://127.0.0.1:${port}`;
+  const logs = [];
+
+  try {
+    const demoPromise = runInteractiveDemo({
+      hubUrl: base,
+      stepDelayMs: 15,
+      timeoutMs: 8_000,
+      noQr: true,
+      once: true,
+      log: (msg) => logs.push(String(msg)),
+    });
+
+    // Wait until Claude Code · DB Migration enters needs_input with the gated prisma command
+    let waitingCard = null;
+    for (let i = 0; i < 60; i += 1) {
+      const st = await (await fetch(`${base}/api/state`)).json();
+      waitingCard = st.agents.find(
+        (a) => a.id === 'demo-claude-migration' && a.status === 'needs_input'
+      );
+      if (waitingCard) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    assert.ok(waitingCard, 'demo must promote Claude Code · DB Migration into needs_input');
+    assert.match(waitingCard.pendingPrompt?.command || '', /prisma migrate deploy/);
+
+    const stateWhileWaiting = await (await fetch(`${base}/api/state`)).json();
+    assert.equal(stateWhileWaiting.agents.length, 3, 'demo seeds 3 realistic agents across lanes');
+
+    // Approve remotely from phone/panel
+    const respondRes = await (
+      await fetch(`${base}/api/agents/demo-claude-migration/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'approve',
+          requestId: waitingCard.pendingPrompt.requestId,
+          sourceDevice: 'Phone PWA',
+        }),
+      })
+    ).json();
+    assert.equal(respondRes.ok, true);
+    assert.equal(respondRes.deliveredLive, true);
+
+    const demoResult = await demoPromise;
+    assert.equal(demoResult.decision.timedOut, false);
+    assert.equal(demoResult.decision.action, 'approve');
+
+    const finalState = await (await fetch(`${base}/api/state`)).json();
+    const finalClaude = finalState.agents.find((a) => a.id === 'demo-claude-migration');
+    assert.equal(finalClaude.status, 'needs_review');
+    assert.match(finalClaude.currentStep, /14\/14 checks passed/);
+    assert.ok(logs.some((l) => l.includes('Demo complete')));
+  } finally {
+    await hub.close();
+  }
+});
