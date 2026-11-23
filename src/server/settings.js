@@ -63,6 +63,7 @@ export const DEFAULT_SETTINGS = {
   iconMode: 'both', // 'both' (Project + Tool badge) | 'tool' (ChatGPT/Claude/Codex/AG) | 'project'
   theme: 'obsidian', // 'obsidian' | 'raycast' | 'hud' | 'titanium'
   dockSide: 'right', // 'right' | 'left'
+  handleStyle: 'notch', // 'notch' (MacBook Dynamic Notch) | 'edge' (Floating Edge Pill)
   panelWidth: 386, // 348 | 386 | 436
   popupMode: 'needs_input', // 'needs_input' | 'urgent_and_review' | 'always'
   showFunctionBar: true,
@@ -130,6 +131,9 @@ function normalizeSettings(raw = {}) {
   const dockSide = ['right', 'left'].includes(raw.dockSide)
     ? raw.dockSide
     : DEFAULT_SETTINGS.dockSide;
+  const handleStyle = ['notch', 'edge'].includes(raw.handleStyle)
+    ? raw.handleStyle
+    : DEFAULT_SETTINGS.handleStyle;
   const panelWidth = Math.max(320, Math.min(520, Number(raw.panelWidth) || DEFAULT_SETTINGS.panelWidth));
   const popupMode = ['needs_input', 'urgent_and_review', 'always'].includes(raw.popupMode)
     ? raw.popupMode
@@ -182,6 +186,7 @@ function normalizeSettings(raw = {}) {
     iconMode,
     theme,
     dockSide,
+    handleStyle,
     panelWidth,
     popupMode,
     showFunctionBar,

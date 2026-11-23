@@ -269,6 +269,24 @@ Keep this secret — anyone with it can answer your agents.`);
       break;
     }
 
+    case 'sidecar': {
+      const target = args[0] || 'agy';
+      if (target === 'agy' || target === 'antigravity') {
+        const { runAgySidecar } = await import('../src/connectors/agy-sidecar.js');
+        const bridge = await runAgySidecar(args.slice(1));
+        const shutdown = () => {
+          bridge.stop();
+          process.exit(0);
+        };
+        process.on('SIGINT', shutdown);
+        process.on('SIGTERM', shutdown);
+      } else {
+        console.error('Usage: incontrol sidecar <agy>');
+        process.exit(1);
+      }
+      break;
+    }
+
     case 'wrap': {
       const { runCliWrapper } = await import('../src/connectors/cli-wrapper.js');
       await runCliWrapper(args);

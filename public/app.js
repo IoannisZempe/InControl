@@ -18,6 +18,8 @@ const ICON_REPLY = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" 
 
 let state = { agents: [], counts: {}, network: {}, globalEvents: [] };
 let filter = 'all';
+let selectedAgentId = null;
+let kbdNavActive = false;
 let ws = null;
 let reconnectDelay = 500;
 let soundOn = localStorage.getItem('incontrol.sound') !== 'off';
@@ -351,6 +353,7 @@ function applySettingsToUI() {
   if ($('#cfg-theme')) $('#cfg-theme').value = theme;
   if ($('#cfg-popup-mode')) $('#cfg-popup-mode').value = s.popupMode || 'needs_input';
   if ($('#cfg-dock-side')) $('#cfg-dock-side').value = s.dockSide || 'right';
+  if ($('#cfg-handle-style')) $('#cfg-handle-style').value = s.handleStyle || 'notch';
   if ($('#cfg-panel-width')) $('#cfg-panel-width').value = String(s.panelWidth || 386);
   if ($('#cfg-show-functions')) $('#cfg-show-functions').checked = s.showFunctionBar !== false;
   if ($('#cfg-voice-approval')) $('#cfg-voice-approval').checked = Boolean(s.allowVoiceApproval);
@@ -384,9 +387,10 @@ function applySettingsToUI() {
     }
   }
 
-  // Sync native macOS panel geometry & pop-up mode
+  // Sync native macOS panel geometry, handle style & pop-up mode
   window.webkit?.messageHandlers?.panelConfig?.postMessage({
     dockSide: s.dockSide || 'right',
+    handleStyle: s.handleStyle || 'notch',
     panelWidth: Number(s.panelWidth || 386),
     popupMode: s.popupMode || 'needs_input',
     demoMode: Boolean(DEMO_MODE),
@@ -676,8 +680,10 @@ function renderCard(a) {
     .filter(Boolean)
     .join('<span class="meta-sep">·</span>');
 
+  const isKbdSelected = kbdNavActive && selectedAgentId === a.id;
+
   return `
-    <article class="agent-card status-${a.status} ${isCardExpanded ? 'is-expanded' : 'is-compact'}" data-id="${esc(a.id)}">
+    <article class="agent-card status-${a.status} ${isCardExpanded ? 'is-expanded' : 'is-compact'} ${isKbdSelected ? 'is-kbd-selected' : ''}" data-id="${esc(a.id)}">
       ${a.status === 'working' ? '<div class="card-aurora-bar"></div>' : ''}
       <div class="card-top">
         <div class="card-title-group">
@@ -1028,17 +1034,144 @@ document.addEventListener('submit', (e) => {
 
 document.addEventListener('keydown', (e) => {
   const ta = e.target.closest?.('.reply-textarea');
-  if (!ta) return;
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    const form = ta.closest('[data-act="reply-form"]');
-    if (form) form.requestSubmit();
-  } else if (e.key === 'Escape') {
-    const agentId = ta.dataset.replyFor;
-    if (agentId) {
-      expandedCards.delete(agentId);
-      renderAgents();
+  if (ta) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const form = ta.closest('[data-act="reply-form"]');
+      if (form) form.requestSubmit();
+    } else if (e.key === 'Escape') {
+      const agentId = ta.dataset.replyFor;
+      if (agentId) {
+        expandedCards.delete(agentId);
+        renderAgents();
+      }
     }
+    return;
+  }
+
+  // Keyboard-First Triage Navigation (↑/↓, ⌘↵ Approve, ⌘⌫ Deny, R Reply, F Focus, L Log, Esc Hide)
+  const inTextField =
+    e.target?.matches?.('input, textarea, select') || e.target?.isContentEditable;
+
+  // Close open modals with Esc even from inputs
+  if (e.key === 'Escape') {
+    const openModal = document.querySelector('.modal-backdrop:not(.hidden)');
+    if (openModal) {
+      openModal.classList.add('hidden');
+      return;
+    }
+    const advDrawer = $('#advanced-drawer');
+    if (advDrawer && !advDrawer.classList.contains('hidden')) {
+      advDrawer.classList.add('hidden');
+      return;
+    }
+    if (inTextField) {
+      e.target.blur?.();
+      return;
+    }
+    window.webkit?.messageHandlers?.windowDrag?.postMessage('hide');
+    return;
+  }
+
+  // Allow ⌘+Enter / ⌘+Backspace even when focused inside a reply input on a needs_input card
+  const isMod = e.metaKey || e.ctrlKey;
+  if (inTextField && !isMod) return;
+
+  // Ignore if a modal is open
+  if (document.querySelector('.modal-backdrop:not(.hidden)')) return;
+
+  const visibleAgents = (state.agents || []).filter((a) => filter === 'all' || a.status === filter);
+  if (!visibleAgents.length) return;
+
+  const currentIdx = Math.max(
+    0,
+    visibleAgents.findIndex((a) => a.id === selectedAgentId)
+  );
+  const currentAgent = visibleAgents[currentIdx];
+
+  const selectByIndex = (nextIdx) => {
+    const clamped = (nextIdx + visibleAgents.length) % visibleAgents.length;
+    selectedAgentId = visibleAgents[clamped].id;
+    kbdNavActive = true;
+    renderAgents();
+    requestAnimationFrame(() => {
+      document.querySelector(`.agent-card[data-id="${cssEscape(selectedAgentId)}"]`)?.scrollIntoView({
+        block: 'nearest',
+        behavior: 'smooth',
+      });
+    });
+  };
+
+  if (!inTextField && (e.key === 'ArrowDown' || e.key === 'j')) {
+    e.preventDefault();
+    selectByIndex(kbdNavActive ? currentIdx + 1 : 0);
+    return;
+  }
+  if (!inTextField && (e.key === 'ArrowUp' || e.key === 'k')) {
+    e.preventDefault();
+    selectByIndex(kbdNavActive ? currentIdx - 1 : visibleAgents.length - 1);
+    return;
+  }
+
+  // ⌘+Enter (or Enter when card is needs_input) => Approve top/selected waiting agent
+  if ((isMod && e.key === 'Enter') || (!inTextField && e.key === 'Enter' && currentAgent.status === 'needs_input')) {
+    if (currentAgent.status === 'needs_input') {
+      e.preventDefault();
+      const firstOpt = currentAgent.pendingPrompt?.options?.[0];
+      if (firstOpt?.replyText) {
+        respond(currentAgent.id, 'reply', firstOpt.replyText);
+      } else {
+        respond(currentAgent.id, firstOpt?.id || 'approve');
+      }
+      toast(`Approved ${currentAgent.projectName || currentAgent.name} (⌘↵)`);
+    }
+    return;
+  }
+
+  // ⌘+Backspace (or D when not typing) => Deny needs_input or Dismiss needs_attention
+  if ((isMod && e.key === 'Backspace') || (!inTextField && (e.key === 'd' || e.key === 'D'))) {
+    if (currentAgent.status === 'needs_input') {
+      e.preventDefault();
+      const note = (draftReplies.get(currentAgent.id) || '').trim();
+      respond(currentAgent.id, 'deny', note);
+      toast(`Denied ${currentAgent.projectName || currentAgent.name} (⌘⌫)`);
+    } else if (currentAgent.status === 'needs_attention') {
+      e.preventDefault();
+      respond(currentAgent.id, 'dismiss');
+      toast(`Dismissed ${currentAgent.projectName || currentAgent.name}`);
+    }
+    return;
+  }
+
+  if (inTextField) return;
+
+  // R / M => Focus reply box (or expand Idle composer)
+  if (e.key === 'r' || e.key === 'R' || e.key === 'm' || e.key === 'M') {
+    e.preventDefault();
+    selectedAgentId = currentAgent.id;
+    kbdNavActive = true;
+    if (currentAgent.status === 'idle') {
+      expandedCards.add(currentAgent.id);
+    }
+    renderAgents();
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-reply-for="${cssEscape(currentAgent.id)}"]`)?.focus();
+    });
+    return;
+  }
+
+  // F => Focus agent IDE window on Mac
+  if (e.key === 'f' || e.key === 'F') {
+    e.preventDefault();
+    focusAgent(currentAgent.id);
+    return;
+  }
+
+  // L => Toggle live activity log
+  if (e.key === 'l' || e.key === 'L') {
+    e.preventDefault();
+    expandedLogs.has(currentAgent.id) ? expandedLogs.delete(currentAgent.id) : expandedLogs.add(currentAgent.id);
+    renderAgents();
   }
 });
 
@@ -1207,6 +1340,7 @@ $('#cfg-icon-mode')?.addEventListener('change', (e) => saveSettingsPatch({ iconM
 $('#cfg-theme')?.addEventListener('change', (e) => saveSettingsPatch({ theme: e.target.value }));
 $('#cfg-popup-mode')?.addEventListener('change', (e) => saveSettingsPatch({ popupMode: e.target.value }));
 $('#cfg-dock-side')?.addEventListener('change', (e) => saveSettingsPatch({ dockSide: e.target.value }));
+$('#cfg-handle-style')?.addEventListener('change', (e) => saveSettingsPatch({ handleStyle: e.target.value }));
 $('#cfg-panel-width')?.addEventListener('change', (e) => saveSettingsPatch({ panelWidth: Number(e.target.value) }));
 $('#cfg-show-functions')?.addEventListener('change', (e) => saveSettingsPatch({ showFunctionBar: e.target.checked }));
 $('#cfg-voice-approval')?.addEventListener('change', async (e) => {

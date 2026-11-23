@@ -27,6 +27,8 @@ export class AgentStore extends EventEmitter {
     this.pendingWaiters = new Map();
     /** @type {Map<string, Function>} */
     this.stdinHandlers = new Map();
+    /** @type {Map<string, Function>} */
+    this.providerBridges = new Map();
     /** @type {Array<any>} */
     this.globalEvents = [];
   }
@@ -235,12 +237,23 @@ export class AgentStore extends EventEmitter {
 
     const isDismissOrDeny =
       action === 'deny' || action === 'reject' || action === 'dismiss' || action === 'acknowledge';
+    const isStopCommand = action === 'stop' || action === 'terminate';
+
+    // 2b. If a provider-level live bridge is connected (e.g. Antigravity sidecar with agentapi), invoke it
+    let deliveredViaBridge = false;
+    if (!resolvedWaiter && !hasLiveHandler && !isDismissOrDeny && !isStopCommand) {
+      const bridge = this.providerBridges.get(String(agent.provider || '').toLowerCase());
+      if (bridge) {
+        deliveredViaBridge = Boolean(bridge({ agent, action, text, requestId, sourceDevice }));
+      }
+    }
+
     const wasAlreadyWorking = previousStatus === 'working';
-    const deliveredLive = resolvedWaiter || hasLiveHandler || wasAlreadyWorking;
+    const deliveredLive = resolvedWaiter || hasLiveHandler || deliveredViaBridge || wasAlreadyWorking;
     const requiresWake = !isDismissOrDeny && !deliveredLive;
 
-    // Queue for hook/polling agents only when neither a blocking waiter nor a live stdin/queue handler consumed the answer
-    if (!resolvedWaiter && !hasLiveHandler) {
+    // Queue for hook/polling agents only when neither a blocking waiter nor a live stdin/bridge handler consumed the answer
+    if (!resolvedWaiter && !hasLiveHandler && !deliveredViaBridge) {
       agent.queuedMessages.push({
         id: `msg_${crypto.randomUUID().slice(0, 8)}`,
         action,
@@ -276,7 +289,7 @@ export class AgentStore extends EventEmitter {
     }
 
     this.emit('change', { type: 'agent_responded', agent: this.serializeAgent(agent) });
-    return { ok: true, deliveredLive, requiresWake, agent: this.serializeAgent(agent) };
+    return { ok: true, deliveredLive, deliveredViaBridge, requiresWake, agent: this.serializeAgent(agent) };
   }
 
   /**
@@ -288,6 +301,22 @@ export class AgentStore extends EventEmitter {
 
   unregisterInputHandler(agentId) {
     this.stdinHandlers.delete(agentId);
+  }
+
+  /**
+   * Register a provider-level live bridge (e.g. Antigravity sidecar with `agentapi`).
+   * Handler returns true if it accepted live delivery for the agent.
+   */
+  registerProviderBridge(provider, fn) {
+    this.providerBridges.set(String(provider || '').toLowerCase(), fn);
+  }
+
+  unregisterProviderBridge(provider) {
+    this.providerBridges.delete(String(provider || '').toLowerCase());
+  }
+
+  hasProviderBridge(provider) {
+    return this.providerBridges.has(String(provider || '').toLowerCase());
   }
 
   /**

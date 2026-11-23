@@ -1,4 +1,5 @@
 import http from 'node:http';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -676,6 +677,93 @@ export async function createInControlHub(options = {}) {
     }
   });
 
+  const agyBridges = new Set();
+  const pendingBridgeDeliveries = new Map();
+
+  function fallbackBridgeDelivery(pending, reason) {
+    const agent = store.agents.get(pending.agentId);
+    if (!agent) return;
+    agent.queuedMessages.push({
+      id: `msg_${crypto.randomUUID().slice(0, 8)}`,
+      action: pending.action,
+      text: pending.text,
+      requestId: pending.requestId || null,
+      sourceDevice: pending.sourceDevice || 'Panel',
+      timestamp: Date.now(),
+    });
+    const detail = String(reason || 'bridge delivery failed').slice(0, 90);
+    store._appendLog(agent, {
+      type: 'error',
+      message: `[InControl] Antigravity sidecar delivery failed (${detail}); queued for next turn`,
+      timestamp: Date.now(),
+    });
+    agent.status = 'needs_attention';
+    agent.currentStep = pending.text
+      ? `Queued (Antigravity bridge failed): "${pending.text.slice(0, 40)}"`
+      : 'Queued (Antigravity bridge failed)';
+    agent.attentionReason = `Sidecar delivery failed (${detail}); click Copy + Focus in Antigravity.`;
+    store.emit('change', { type: 'agent_updated', agent: store.serializeAgent(agent) });
+  }
+
+  function getActiveAgyBridge() {
+    for (const sock of agyBridges) {
+      if (sock.readyState === 1) return sock;
+    }
+    return null;
+  }
+
+  function syncAgyBridgeRegistration() {
+    if (getActiveAgyBridge()) {
+      store.registerProviderBridge('antigravity', ({ agent, action, text, requestId, sourceDevice }) => {
+        const sock = getActiveAgyBridge();
+        const conversationId = agent.metadata?.conversationId;
+        const cleanText = String(text || '').trim();
+        const hasDeliverable = Boolean(cleanText) || action === 'approve' || action === 'yes';
+        if (!sock || !conversationId || !hasDeliverable) {
+          return false;
+        }
+        const deliveryId = `del_${crypto.randomUUID().slice(0, 10)}`;
+        const timer = setTimeout(() => {
+          const pending = pendingBridgeDeliveries.get(deliveryId);
+          if (!pending) return;
+          pendingBridgeDeliveries.delete(deliveryId);
+          fallbackBridgeDelivery(pending, 'timed out waiting for agentapi');
+        }, 20_000);
+        timer.unref?.();
+
+        pendingBridgeDeliveries.set(deliveryId, {
+          agentId: agent.id,
+          action,
+          text: cleanText,
+          requestId,
+          sourceDevice,
+          timer,
+        });
+
+        try {
+          sock.send(
+            JSON.stringify({
+              type: 'deliver_message',
+              deliveryId,
+              agentId: agent.id,
+              conversationId,
+              action,
+              text: cleanText,
+              sourceDevice: sourceDevice || 'Panel',
+            })
+          );
+          return true;
+        } catch {
+          clearTimeout(timer);
+          pendingBridgeDeliveries.delete(deliveryId);
+          return false;
+        }
+      });
+    } else {
+      store.unregisterProviderBridge('antigravity');
+    }
+  }
+
   wss.on('connection', (ws) => {
     ws.send(
       JSON.stringify({
@@ -687,7 +775,43 @@ export async function createInControlHub(options = {}) {
     ws.on('message', async (raw) => {
       try {
         const msg = JSON.parse(String(raw));
-        if (msg.type === 'respond' && msg.agentId) {
+        if (msg.type === 'register_bridge' && msg.provider === 'antigravity') {
+          if (msg.hasAgentApi !== false) {
+            agyBridges.add(ws);
+            syncAgyBridgeRegistration();
+            ws.send(JSON.stringify({ type: 'bridge_registered', ok: true, provider: 'antigravity' }));
+          } else {
+            ws.send(
+              JSON.stringify({
+                type: 'bridge_registered',
+                ok: false,
+                provider: 'antigravity',
+                reason: 'agentapi not found in sidecar PATH',
+              })
+            );
+          }
+        } else if (msg.type === 'bridge_result' && msg.deliveryId) {
+          const pending = pendingBridgeDeliveries.get(msg.deliveryId);
+          if (pending) {
+            clearTimeout(pending.timer);
+            pendingBridgeDeliveries.delete(msg.deliveryId);
+            const agent = store.agents.get(pending.agentId);
+            if (msg.ok && agent) {
+              const preview = pending.text || pending.action || 'reply';
+              agent.status = 'working';
+              agent.currentStep = `Sent to Antigravity: "${String(preview).slice(0, 48)}"`;
+              agent.attentionReason = null;
+              store._appendLog(agent, {
+                type: 'info',
+                message: `[InControl] Delivered live via Antigravity sidecar (agentapi)`,
+                timestamp: Date.now(),
+              });
+              store.emit('change', { type: 'agent_updated', agent: store.serializeAgent(agent) });
+            } else if (!msg.ok) {
+              fallbackBridgeDelivery(pending, msg.error || 'agentapi send-message failed');
+            }
+          }
+        } else if (msg.type === 'respond' && msg.agentId) {
           store.respondToAgent(msg.agentId, msg);
         } else if (msg.type === 'focus' && msg.agentId) {
           const agent = store.agents.get(msg.agentId);
@@ -695,6 +819,12 @@ export async function createInControlHub(options = {}) {
         }
       } catch {
         // Ignore malformed WS messages
+      }
+    });
+
+    ws.on('close', () => {
+      if (agyBridges.delete(ws)) {
+        syncAgyBridgeRegistration();
       }
     });
   });
@@ -714,6 +844,12 @@ export async function createInControlHub(options = {}) {
     port,
     token,
     close: async () => {
+      for (const pending of pendingBridgeDeliveries.values()) {
+        clearTimeout(pending.timer);
+      }
+      pendingBridgeDeliveries.clear();
+      agyBridges.clear();
+      store.unregisterProviderBridge('antigravity');
       stopAutoWatcher();
       stopAutoContextSync();
       stopWhatsApp();

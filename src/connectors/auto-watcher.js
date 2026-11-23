@@ -17,6 +17,9 @@ const AGY_PLUGIN_DIR = path.join(AGY_CONFIG_DIR, 'plugins', 'incontrol');
 const AGY_PLUGIN_MANIFEST = path.join(AGY_PLUGIN_DIR, 'plugin.json');
 const AGY_PLUGIN_HOOKS = path.join(AGY_PLUGIN_DIR, 'hooks.json');
 const AGY_PLUGIN_MCP = path.join(AGY_PLUGIN_DIR, 'mcp_config.json');
+const AGY_PLUGIN_SIDECAR_DIR = path.join(AGY_PLUGIN_DIR, 'sidecars', 'bridge');
+const AGY_PLUGIN_SIDECAR = path.join(AGY_PLUGIN_SIDECAR_DIR, 'sidecar.json');
+const AGY_USER_CONFIG = path.join(AGY_CONFIG_DIR, 'config.json');
 const CODEX_DIR = path.join(HOME, '.codex');
 const CODEX_INDEX = path.join(CODEX_DIR, 'session_index.jsonl');
 const CODEX_SESSIONS_DIR = path.join(CODEX_DIR, 'sessions');
@@ -647,6 +650,7 @@ export function getIntegrationsStatus() {
     fileContains(AGY_PLUGIN_HOOKS, 'incontrol') || fileContains(AGY_HOOKS_CONFIG, 'incontrol');
   const agyMcpInstalled =
     fileContains(AGY_PLUGIN_MCP, 'incontrol') || fileContains(AGY_MCP_CONFIG, 'incontrol');
+  const agySidecarInstalled = fileContains(AGY_PLUGIN_SIDECAR, 'sidecar');
   const agyFullyConfigured = agyHooksInstalled && agyMcpInstalled;
 
   const codexDetected = fs.existsSync(CODEX_DIR);
@@ -663,12 +667,15 @@ export function getIntegrationsStatus() {
       id: 'antigravity',
       name: 'Antigravity',
       iconUrl: '/api/icons/tool/antigravity',
-      subtitle: 'Antigravity plugin (~/.gemini/config/plugins/incontrol) + Hooks + MCP + watcher',
+      subtitle: 'Antigravity plugin (~/.gemini/config/plugins/incontrol) + Hooks + MCP + Sidecar Bridge',
       detected: agyDetected,
       autoWatched: agyDetected,
       configured: agyFullyConfigured,
-      actionLabel: agyFullyConfigured ? 'Reinstall Hooks & MCP' : 'Enable Two-Way Control',
-      statusText: agyFullyConfigured
+      sidecarConfigured: agySidecarInstalled,
+      actionLabel: agyFullyConfigured ? 'Reinstall Hooks, MCP & Sidecar' : 'Enable Two-Way Control',
+      statusText: agyFullyConfigured && agySidecarInstalled
+        ? 'Hooks + MCP + Sidecar Bridge Active'
+        : agyFullyConfigured
         ? 'Hooks + MCP + Watcher Active'
         : agyDetected
         ? 'Live Watcher Active'
@@ -769,16 +776,27 @@ When a user prompt or turn includes \`[From InControl\` (steered from the Mac Si
 - Prefer calling the \`incontrol_ask_human\` MCP tool (with \`question\`, \`options\`, and optional \`command\`) instead of ending the turn in plain prose alone, whenever you expect a follow-up click or command from the panel.
 - Holding on \`incontrol_ask_human\` keeps the session alive so clicking Approve/Commit/Send in the InControl panel executes immediately without switching back to the Antigravity IDE.
 `;
+    const pluginSidecar = {
+      display_name: 'InControl Live Bridge',
+      description: 'Delivers InControl and TheOne replies directly into Antigravity conversations via agentapi.',
+      command: inv.command,
+      args: [...inv.args, 'sidecar', 'agy'],
+      restart_policy: 'always',
+    };
     fs.mkdirSync(pluginRulesDir, { recursive: true });
+    fs.mkdirSync(AGY_PLUGIN_SIDECAR_DIR, { recursive: true });
     fs.writeFileSync(AGY_PLUGIN_MANIFEST, JSON.stringify(pluginManifest, null, 2));
     fs.writeFileSync(AGY_PLUGIN_HOOKS, JSON.stringify(agyHooks, null, 2));
     fs.writeFileSync(AGY_PLUGIN_MCP, JSON.stringify(pluginMcp, null, 2));
+    fs.writeFileSync(AGY_PLUGIN_SIDECAR, JSON.stringify(pluginSidecar, null, 2));
     fs.writeFileSync(path.join(pluginRulesDir, 'AGENTS.md'), pluginRuleMd);
+    enableAgySidecarInConfig('incontrol/bridge');
     upsertJsonMcpConfig(AGY_MCP_CONFIG, 'Antigravity');
     stripLegacyIncontrolHooks();
     return {
       ok: true,
-      message: 'Installed InControl Antigravity plugin (hooks + MCP + rule) in ~/.gemini/config/plugins/incontrol/',
+      message:
+        'Installed InControl Antigravity plugin (hooks + MCP + sidecar bridge + rule) in ~/.gemini/config/plugins/incontrol/ and enabled sidecar in ~/.gemini/config/config.json',
     };
   }
 
@@ -821,6 +839,26 @@ When a user prompt or turn includes \`[From InControl\` (steered from the Mac Si
   }
 
   throw new Error(`Unknown integration target: ${targetId}`);
+}
+
+function enableAgySidecarInConfig(sidecarId) {
+  let cfg = {};
+  if (fs.existsSync(AGY_USER_CONFIG)) {
+    try {
+      cfg = JSON.parse(fs.readFileSync(AGY_USER_CONFIG, 'utf8'));
+    } catch {}
+  }
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) {
+    cfg = {};
+  }
+  cfg.sidecars = cfg.sidecars && typeof cfg.sidecars === 'object' ? cfg.sidecars : {};
+  const existing = cfg.sidecars[sidecarId] && typeof cfg.sidecars[sidecarId] === 'object' ? cfg.sidecars[sidecarId] : {};
+  cfg.sidecars[sidecarId] = {
+    ...existing,
+    enabled: true,
+  };
+  fs.mkdirSync(path.dirname(AGY_USER_CONFIG), { recursive: true });
+  fs.writeFileSync(AGY_USER_CONFIG, JSON.stringify(cfg, null, 2), { mode: 0o600 });
 }
 
 function upsertJsonMcpConfig(filePath, ideName) {
@@ -1118,11 +1156,21 @@ export function inspectAgentDelivery(store, agent, respondResult = null) {
   const tool = (agent.provider || agent.tool || agent.toolKey || '').toLowerCase();
   const isTurnEnded = agent.status === 'idle' || agent.status === 'needs_attention';
 
+  if (respondResult?.deliveredViaBridge) {
+    return { ready: true, mode: 'sidecar-bridge' };
+  }
+
   if (respondResult?.deliveredLive) {
     return { ready: true, mode: tool === 'antigravity' ? 'plugin' : 'live' };
   }
 
   if (tool === 'antigravity') {
+    if (store?.hasProviderBridge?.('antigravity') && agent.metadata?.conversationId) {
+      return {
+        ready: true,
+        mode: 'sidecar-bridge',
+      };
+    }
     const hooksReady =
       fileContains(AGY_PLUGIN_HOOKS, 'incontrol') || fileContains(AGY_HOOKS_CONFIG, 'incontrol');
     const mcpReady =

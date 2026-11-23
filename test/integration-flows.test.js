@@ -1114,3 +1114,189 @@ test('flow: PWA Service Worker + Web Push subscribes, pushes encrypted Bash aler
     await hub.close();
   }
 });
+
+test('flow: Dynamic Notch handleStyle setting persists and Mac Notch quick-approve resolves Bash gate', async () => {
+  const hub = await createInControlHub({
+    port: 0,
+    macNotifications: false,
+    autoWatch: false,
+  });
+  const port = hub.server.address().port;
+  const base = `http://127.0.0.1:${port}`;
+
+  try {
+    // 1. Default handleStyle is 'notch', toggleable to 'edge' and back to 'notch', rejecting invalid values
+    const s1 = await (
+      await fetch(`${base}/api/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handleStyle: 'edge' }),
+      })
+    ).json();
+    assert.equal(s1.ok, true);
+    assert.equal(s1.settings.handleStyle, 'edge');
+
+    const s2 = await (
+      await fetch(`${base}/api/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handleStyle: 'invalid-style' }),
+      })
+    ).json();
+    assert.equal(s2.settings.handleStyle, 'notch', 'Invalid handleStyle falls back to default notch');
+
+    // 2. Mac Notch quick-approve resolves blocking Bash prompt live with sourceDevice "Mac Notch"
+    const askPromise = fetch(`${base}/api/agents/ask`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: 'claude-notch-approve',
+        name: 'Claude Code',
+        provider: 'claude-code',
+        question: 'Allow migration?',
+        command: 'npx prisma migrate deploy',
+        wait: true,
+        timeoutMs: 10_000,
+      }),
+    }).then((r) => r.json());
+
+    let waiting = null;
+    for (let i = 0; i < 40; i += 1) {
+      const st = await (await fetch(`${base}/api/state`)).json();
+      waiting = st.agents.find((a) => a.id === 'claude-notch-approve' && a.status === 'needs_input');
+      if (waiting) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    assert.ok(waiting?.pendingPrompt?.requestId);
+
+    const notchRes = await (
+      await fetch(`${base}/api/agents/claude-notch-approve/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'approve',
+          requestId: waiting.pendingPrompt.requestId,
+          sourceDevice: 'Mac Notch',
+        }),
+      })
+    ).json();
+    assert.equal(notchRes.ok, true);
+    assert.equal(notchRes.deliveredLive, true);
+
+    const askResolution = await askPromise;
+    assert.equal(askResolution.action, 'approve');
+    assert.equal(askResolution.sourceDevice, 'Mac Notch');
+  } finally {
+    await hub.close();
+  }
+});
+
+test('flow: Antigravity sidecar bridge delivers TheOne/panel messages immediately to ended turns via agentapi and falls back on error', async () => {
+  const { runAgySidecar } = await import('../src/connectors/agy-sidecar.js');
+  const hub = await createInControlHub({
+    port: 4829,
+    macNotifications: false,
+    token: 'flow-sidecar-tok',
+    autoWatch: false,
+  });
+  const base = 'http://127.0.0.1:4829';
+
+  const calls = [];
+  let shouldFailNext = false;
+  const mockExecFile = (cmd, args, _opts, cb) => {
+    calls.push({ cmd, args });
+    if (shouldFailNext) {
+      shouldFailNext = false;
+      return cb(new Error('agentapi exited 1'), '', 'conversation not found');
+    }
+    cb(null, 'delivered', '');
+  };
+
+  const sidecar = await runAgySidecar([], {
+    hubUrl: base,
+    execFileFn: mockExecFile,
+    checkAgentApiFn: async () => true,
+  });
+
+  try {
+    // Wait for sidecar WebSocket registration
+    for (let i = 0; i < 40; i += 1) {
+      if (hub.store.hasProviderBridge('antigravity')) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    assert.equal(hub.store.hasProviderBridge('antigravity'), true, 'Sidecar must register antigravity bridge');
+
+    // Register an ended/idle Antigravity conversation (the exact case that previously required waking manually)
+    hub.store.upsertAgent({
+      id: 'agy-conv1234',
+      name: 'Antigravity',
+      provider: 'antigravity',
+      ide: 'Antigravity',
+      workspace: ROOT,
+      status: 'needs_attention',
+      currentStep: 'Turn complete — ready for review',
+      metadata: { conversationId: 'conv1234-5678-90ab-cdef' },
+    });
+
+    // 1. Happy path: user sends message from TheOne iOS -> delivered live via agentapi send-message
+    const res = await (
+      await fetch(`${base}/api/agents/agy-conv1234/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reply',
+          text: 'run the unit tests now',
+          sourceDevice: 'TheOne iOS',
+        }),
+      })
+    ).json();
+
+    assert.equal(res.ok, true);
+    assert.equal(res.deliveredLive, true);
+    assert.equal(res.requiresWake, false);
+    assert.equal(res.delivery?.mode, 'sidecar-bridge');
+
+    for (let i = 0; i < 40; i += 1) {
+      if (calls.length >= 1 && hub.store.agents.get('agy-conv1234')?.currentStep?.includes('Sent to Antigravity')) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].cmd, 'agentapi');
+    assert.deepEqual(calls[0].args, [
+      'send-message',
+      'conv1234-5678-90ab-cdef',
+      '[From InControl (TheOne iOS)]: run the unit tests now',
+    ]);
+    assert.equal(
+      hub.store.agents.get('agy-conv1234').queuedMessages.length,
+      0,
+      'Live-delivered message must not stay in queuedMessages (prevents double injection on PreInvocation)'
+    );
+    assert.equal(hub.store.agents.get('agy-conv1234').status, 'working');
+
+    // 2. Failure fallback: if agentapi fails, Hub queues message honestly and sets needs_attention
+    shouldFailNext = true;
+    await fetch(`${base}/api/agents/agy-conv1234/respond`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'reply',
+        text: 'retry this later',
+        sourceDevice: 'TheOne iOS',
+      }),
+    });
+
+    for (let i = 0; i < 40; i += 1) {
+      if (hub.store.agents.get('agy-conv1234')?.queuedMessages?.length === 1) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    const afterFail = hub.store.agents.get('agy-conv1234');
+    assert.equal(afterFail.status, 'needs_attention');
+    assert.equal(afterFail.queuedMessages.length, 1);
+    assert.equal(afterFail.queuedMessages[0].text, 'retry this later');
+  } finally {
+    sidecar.stop();
+    await hub.close();
+  }
+});

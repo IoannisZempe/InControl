@@ -97,6 +97,225 @@ final class EdgeHandleView: NSView {
     }
 }
 
+/// MacBook Pro Dynamic Notch Extension — hugs both sides of the hardware notch in compact state
+/// and expands smoothly downward on hover with live agent status + 1-click Approve / Deny buttons.
+final class NotchHandleView: NSView {
+    var urgentCount: Int = 0 { didSet { needsDisplay = true } }
+    var workingCount: Int = 0 { didSet { needsDisplay = true } }
+    var stayHidden: Bool = false { didSet { needsDisplay = true } }
+    var expanded: Bool = false { didSet { needsDisplay = true } }
+    var topAgentId: String? = nil
+    var topAgentRequestId: String? = nil
+    var topAgentTitle: String = "TheOne" { didSet { needsDisplay = true } }
+    var topAgentSubtitle: String = "All clear · Click or press ⌥⇧T" { didSet { needsDisplay = true } }
+    var topAgentNeedsInput: Bool = false { didSet { needsDisplay = true } }
+
+    var onOpen: (() -> Void)?
+    var onHoverChange: ((Bool) -> Void)?
+    var onQuickDecision: ((_ agentId: String, _ requestId: String?, _ action: String) -> Void)?
+
+    private var trackingArea: NSTrackingArea?
+    private var approveRect: NSRect = .zero
+    private var denyRect: NSRect = .zero
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let existing = trackingArea {
+            removeTrackingArea(existing)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        onHoverChange?(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onHoverChange?(false)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let w = bounds.width
+        let h = bounds.height
+        let r: CGFloat = expanded ? 18 : 14
+
+        // Top-flat, bottom-rounded black capsule merging seamlessly into the MacBook Pro notch
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: 0, y: h))
+        path.line(to: NSPoint(x: w, y: h))
+        path.line(to: NSPoint(x: w, y: r))
+        path.appendArc(withCenter: NSPoint(x: w - r, y: r), radius: r, startAngle: 0, endAngle: 270, clockwise: true)
+        path.line(to: NSPoint(x: r, y: 0))
+        path.appendArc(withCenter: NSPoint(x: r, y: r), radius: r, startAngle: 270, endAngle: 180, clockwise: true)
+        path.close()
+
+        NSColor(calibratedRed: 0.02, green: 0.02, blue: 0.03, alpha: 0.98).setFill()
+        path.fill()
+
+        let rimColor = urgentCount > 0
+            ? NSColor(calibratedRed: 0.94, green: 0.28, blue: 0.25, alpha: 0.85)
+            : NSColor(calibratedRed: 0.91, green: 0.77, blue: 0.41, alpha: expanded ? 0.65 : 0.42)
+        rimColor.setStroke()
+        path.lineWidth = 1.2
+        path.stroke()
+
+        // Top bar wings (y near top of capsule, flanking the ~185px camera notch)
+        let wingCy = h - 19
+
+        // Left Wing: Forged Gold One Ring & Eye Emblem
+        let lx: CGFloat = 22
+        let ringColor = urgentCount > 0
+            ? NSColor(calibratedRed: 1.0, green: 0.42, blue: 0.28, alpha: 1.0)
+            : NSColor(calibratedRed: 0.91, green: 0.77, blue: 0.41, alpha: 0.98)
+        let ring = NSBezierPath()
+        ring.appendArc(withCenter: NSPoint(x: lx, y: wingCy), radius: 7.2, startAngle: 0, endAngle: 360)
+        ring.lineWidth = 1.9
+        ringColor.setStroke()
+        ring.stroke()
+
+        let iris = NSBezierPath(ovalIn: NSRect(x: lx - 1.4, y: wingCy - 4.2, width: 2.8, height: 8.4))
+        ringColor.setFill()
+        iris.fill()
+
+        let pupil = NSBezierPath(ovalIn: NSRect(x: lx - 0.5, y: wingCy - 2.8, width: 1.0, height: 5.6))
+        NSColor(calibratedWhite: 0.04, alpha: 1.0).setFill()
+        pupil.fill()
+
+        // Right Wing: Compact status dot + count or muted moon
+        let rx: CGFloat = w - 22
+        if urgentCount > 0 {
+            let dot = NSBezierPath(ovalIn: NSRect(x: rx - 14, y: wingCy - 3.5, width: 7, height: 7))
+            NSColor(calibratedRed: 0.96, green: 0.28, blue: 0.26, alpha: 1.0).setFill()
+            dot.fill()
+            let txt = (urgentCount > 9 ? "9+" : "\(urgentCount)") as NSString
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .bold),
+                .foregroundColor: NSColor(calibratedRed: 1.0, green: 0.78, blue: 0.75, alpha: 1.0)
+            ]
+            let sz = txt.size(withAttributes: attrs)
+            txt.draw(at: NSPoint(x: rx - 3, y: wingCy - sz.height / 2), withAttributes: attrs)
+        } else if stayHidden {
+            let txt = "☾" as NSString
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+                .foregroundColor: NSColor(calibratedRed: 0.91, green: 0.77, blue: 0.41, alpha: 0.85)
+            ]
+            let sz = txt.size(withAttributes: attrs)
+            txt.draw(at: NSPoint(x: rx - sz.width / 2, y: wingCy - sz.height / 2), withAttributes: attrs)
+        } else {
+            let dot = NSBezierPath(ovalIn: NSRect(x: rx - 10, y: wingCy - 3.2, width: 6.4, height: 6.4))
+            NSColor(calibratedRed: 0.19, green: 0.82, blue: 0.35, alpha: 0.95).setFill()
+            dot.fill()
+            if workingCount > 0 {
+                let txt = "\(workingCount)" as NSString
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: NSFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .semibold),
+                    .foregroundColor: NSColor(calibratedWhite: 0.85, alpha: 0.9)
+                ]
+                let sz = txt.size(withAttributes: attrs)
+                txt.draw(at: NSPoint(x: rx, y: wingCy - sz.height / 2), withAttributes: attrs)
+            }
+        }
+
+        // Expanded Shelf Below the Hardware Notch
+        approveRect = .zero
+        denyRect = .zero
+        guard expanded else { return }
+
+        let padX: CGFloat = 16
+        let titleY = h - 56
+        let titleAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 12, weight: .bold),
+            .foregroundColor: NSColor.white
+        ]
+        (topAgentTitle as NSString).draw(
+            in: NSRect(x: padX, y: titleY, width: w - padX * 2 - 70, height: 16),
+            withAttributes: titleAttrs
+        )
+
+        let shortcutHint = "⌥⇧T" as NSString
+        let hintAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold),
+            .foregroundColor: NSColor(calibratedRed: 0.91, green: 0.77, blue: 0.41, alpha: 0.85)
+        ]
+        let hintSz = shortcutHint.size(withAttributes: hintAttrs)
+        shortcutHint.draw(at: NSPoint(x: w - padX - hintSz.width, y: titleY + 1), withAttributes: hintAttrs)
+
+        let subY = h - 74
+        let subAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 10.5, weight: .regular),
+            .foregroundColor: topAgentNeedsInput
+                ? NSColor(calibratedRed: 1.0, green: 0.94, blue: 0.78, alpha: 0.95)
+                : NSColor(calibratedWhite: 0.65, alpha: 1.0)
+        ]
+        (topAgentSubtitle as NSString).draw(
+            in: NSRect(x: padX, y: subY, width: w - padX * 2, height: 15),
+            withAttributes: subAttrs
+        )
+
+        if topAgentNeedsInput, topAgentId != nil {
+            let btnY: CGFloat = 10
+            let btnH: CGFloat = 24
+            let btnW: CGFloat = (w - padX * 2 - 8) / 2
+            approveRect = NSRect(x: padX, y: btnY, width: btnW, height: btnH)
+            denyRect = NSRect(x: padX + btnW + 8, y: btnY, width: btnW, height: btnH)
+
+            let appPath = NSBezierPath(roundedRect: approveRect, xRadius: 7, yRadius: 7)
+            NSColor(calibratedRed: 0.91, green: 0.77, blue: 0.41, alpha: 0.95).setFill()
+            appPath.fill()
+            let appLabel = "✓ Approve" as NSString
+            let appAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 11, weight: .bold),
+                .foregroundColor: NSColor(calibratedWhite: 0.05, alpha: 1.0)
+            ]
+            let appSz = appLabel.size(withAttributes: appAttrs)
+            appLabel.draw(
+                at: NSPoint(x: approveRect.midX - appSz.width / 2, y: approveRect.midY - appSz.height / 2),
+                withAttributes: appAttrs
+            )
+
+            let denyPath = NSBezierPath(roundedRect: denyRect, xRadius: 7, yRadius: 7)
+            NSColor(calibratedRed: 0.35, green: 0.11, blue: 0.12, alpha: 0.95).setFill()
+            denyPath.fill()
+            NSColor(calibratedRed: 0.94, green: 0.28, blue: 0.26, alpha: 0.55).setStroke()
+            denyPath.lineWidth = 1.0
+            denyPath.stroke()
+            let denyLabel = "✕ Deny" as NSString
+            let denyAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+                .foregroundColor: NSColor(calibratedRed: 1.0, green: 0.76, blue: 0.76, alpha: 1.0)
+            ]
+            let denySz = denyLabel.size(withAttributes: denyAttrs)
+            denyLabel.draw(
+                at: NSPoint(x: denyRect.midX - denySz.width / 2, y: denyRect.midY - denySz.height / 2),
+                withAttributes: denyAttrs
+            )
+        }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        let loc = convert(event.locationInWindow, from: nil)
+        if expanded, topAgentNeedsInput, let id = topAgentId {
+            if approveRect.contains(loc) {
+                onQuickDecision?(id, topAgentRequestId, "approve")
+                return
+            }
+            if denyRect.contains(loc) {
+                onQuickDecision?(id, topAgentRequestId, "deny")
+                return
+            }
+        }
+        onOpen?()
+    }
+}
+
 private var globalHotKeyHandlerRef: EventHandlerRef?
 private weak var globalHotKeyDelegate: AppDelegate?
 
@@ -122,17 +341,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     var panel: SidePanel!
     var edgePanel: NSPanel!
     var edgeHandleView: EdgeHandleView!
+    var notchPanel: NSPanel!
+    var notchHandleView: NotchHandleView!
+    var notchExpanded: Bool = false
     var edgeHandleY: CGFloat? = nil
     var webView: PanelWebView!
     var statusItem: NSStatusItem!
     var autoMenuItem: NSMenuItem?
     var stayHiddenMenuItem: NSMenuItem?
+    var notchMenuItem: NSMenuItem?
     var tileMenuItem: NSMenuItem?
     var hotKeyRef: EventHotKeyRef?
     let hubURL: URL
     let explicitCliPath: String?
     var panelWidth: CGFloat = 386
     var dockSide: String = "right"
+    var handleStyle: String = "notch" // "notch" | "edge"
     var popupMode: String = "needs_input"
     var autoPopupOnly: Bool = true
     var stayHidden: Bool = false
@@ -141,6 +365,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     var manuallyShown: Bool = true
     var hadUrgentAction: Bool = false
     var currentActionCount: Int = 0
+    var currentWorkingCount: Int = 0
     var lastUrgentSignature: String = ""
     var dismissedSignature: String = ""
     var statePollTimer: Timer?
@@ -156,27 +381,121 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         NSApp.setActivationPolicy(.accessory)
         setupPanel()
         setupEdgeHandle()
+        setupNotchHandle()
         setupStatusItem()
         registerGlobalHotkey()
         positionDockFrame(animate: false)
-        showMainPanel()
+        showMainPanel(focusForKeyboard: false)
         startStatePoller()
         NotificationCenter.default.addObserver(
             self, selector: #selector(handleScreenChange),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
     }
 
-    func showMainPanel() {
+    func showMainPanel(focusForKeyboard: Bool = false) {
         edgePanel?.orderOut(nil)
-        panel.orderFrontRegardless()
+        notchPanel?.orderOut(nil)
+        notchExpanded = false
+        notchHandleView?.expanded = false
+        if focusForKeyboard {
+            NSApp.activate(ignoringOtherApps: true)
+            panel.makeKeyAndOrderFront(nil)
+            panel.makeFirstResponder(webView)
+        } else {
+            panel.orderFrontRegardless()
+        }
     }
 
     func hideMainPanel() {
         panel.orderOut(nil)
-        positionEdgeHandle()
-        edgeHandleView?.urgentCount = currentActionCount
-        edgeHandleView?.stayHidden = stayHidden
-        edgePanel?.orderFrontRegardless()
+        if handleStyle == "notch" {
+            edgePanel?.orderOut(nil)
+            positionNotchHandle(expanded: false, animate: false)
+            notchHandleView?.urgentCount = currentActionCount
+            notchHandleView?.workingCount = currentWorkingCount
+            notchHandleView?.stayHidden = stayHidden
+            notchPanel?.orderFrontRegardless()
+        } else {
+            notchPanel?.orderOut(nil)
+            positionEdgeHandle()
+            edgeHandleView?.urgentCount = currentActionCount
+            edgeHandleView?.stayHidden = stayHidden
+            edgePanel?.orderFrontRegardless()
+        }
+    }
+
+    func setupNotchHandle() {
+        notchPanel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 286, height: 38),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        notchPanel.isOpaque = false
+        notchPanel.backgroundColor = .clear
+        notchPanel.hasShadow = true
+        notchPanel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.statusWindow)) + 1)
+        notchPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        notchPanel.hidesOnDeactivate = false
+
+        let view = NotchHandleView(frame: NSRect(x: 0, y: 0, width: 286, height: 38))
+        view.toolTip = "TheOne Dynamic Notch · Hover for quick actions, click or press ⌥⇧T to open"
+        view.onOpen = { [weak self] in
+            guard let self = self else { return }
+            self.stayHidden = false
+            self.stayHiddenMenuItem?.state = .off
+            self.manuallyShown = true
+            self.updateMenuBarBadge(count: self.currentActionCount)
+            self.showMainPanel(focusForKeyboard: true)
+            self.pollHubState()
+        }
+        view.onHoverChange = { [weak self] isHovering in
+            guard let self = self, !self.panel.isVisible else { return }
+            self.positionNotchHandle(expanded: isHovering, animate: true)
+        }
+        view.onQuickDecision = { [weak self] agentId, reqId, action in
+            self?.sendQuickDecision(agentId: agentId, requestId: reqId, action: action)
+        }
+        notchPanel.contentView = view
+        self.notchHandleView = view
+        positionNotchHandle(expanded: false, animate: false)
+    }
+
+    func positionNotchHandle(expanded: Bool, animate: Bool) {
+        guard let notchPanel = notchPanel, let screen = panel.screen ?? NSScreen.main else { return }
+        notchExpanded = expanded
+        notchHandleView?.expanded = expanded
+        let f = screen.frame
+        let w: CGFloat = expanded ? 360 : 286
+        let h: CGFloat = expanded ? (notchHandleView?.topAgentNeedsInput == true ? 114 : 84) : 38
+        let x = f.midX - w / 2
+        let y = f.maxY - h
+        let target = NSRect(x: x, y: y, width: w, height: h)
+        if animate {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.16
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                notchPanel.animator().setFrame(target, display: true)
+            }
+        } else {
+            notchPanel.setFrame(target, display: true)
+        }
+    }
+
+    func sendQuickDecision(agentId: String, requestId: String?, action: String) {
+        let encoded = agentId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? agentId
+        guard let url = URL(string: "/api/agents/\(encoded)/respond", relativeTo: hubURL) else { return }
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 4)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["action": action, "sourceDevice": "Mac Notch"]
+        if let reqId = requestId, !reqId.isEmpty { body["requestId"] = reqId }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        URLSession.shared.dataTask(with: req) { [weak self] _, _, _ in
+            DispatchQueue.main.async {
+                self?.pollHubState()
+            }
+        }.resume()
     }
 
     func setupEdgeHandle() {
@@ -201,7 +520,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             self.stayHiddenMenuItem?.state = .off
             self.manuallyShown = true
             self.updateMenuBarBadge(count: self.currentActionCount)
-            self.showMainPanel()
+            self.showMainPanel(focusForKeyboard: true)
             self.pollHubState()
         }
         view.onMovedY = { [weak self] newY in
@@ -275,9 +594,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             let settings = json["settings"] as? [String: Any] ?? [:]
             let agents = json["agents"] as? [[String: Any]] ?? []
             let mode = (settings["popupMode"] as? String) ?? self.popupMode
+            let hStyle = (settings["handleStyle"] as? String) ?? self.handleStyle
             let needsInput = (counts["needs_input"] as? Int) ?? 0
             let needsAttention = (counts["needs_attention"] as? Int) ?? 0
+            let workingCount = (counts["working"] as? Int) ?? 0
             let actionCount = (mode == "urgent_and_review") ? (needsInput + needsAttention) : needsInput
+
+            let topAgent = agents.first
+            let topId = topAgent?["id"] as? String
+            let topStatus = topAgent?["status"] as? String ?? ""
+            let topProj = (topAgent?["projectName"] as? String) ?? (topAgent?["name"] as? String) ?? "TheOne"
+            let topName = (topAgent?["name"] as? String) ?? ""
+            let topPrompt = topAgent?["pendingPrompt"] as? [String: Any]
+            let topReqId = topPrompt?["requestId"] as? String
+            let topCmd = topPrompt?["command"] as? String
+            let topQ = topPrompt?["question"] as? String
+            let topStep = topAgent?["currentStep"] as? String
 
             let urgentKeys: [String] = agents.compactMap { a in
                 let st = a["status"] as? String ?? ""
@@ -294,13 +626,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
             DispatchQueue.main.async {
                 self.popupMode = mode
+                self.currentWorkingCount = workingCount
+                if hStyle != self.handleStyle {
+                    self.handleStyle = hStyle
+                    self.notchMenuItem?.state = (hStyle == "notch") ? .on : .off
+                    if !self.panel.isVisible {
+                        self.hideMainPanel()
+                    }
+                }
+                if let nv = self.notchHandleView {
+                    nv.workingCount = workingCount
+                    nv.topAgentId = topId
+                    nv.topAgentRequestId = topReqId
+                    nv.topAgentNeedsInput = (topStatus == "needs_input")
+                    if let _ = topAgent {
+                        nv.topAgentTitle = topName.isEmpty ? topProj : "\(topProj) · \(topName)"
+                        if let cmd = topCmd, !cmd.isEmpty {
+                            nv.topAgentSubtitle = "$ \(cmd)"
+                        } else if let q = topQ, !q.isEmpty {
+                            nv.topAgentSubtitle = q
+                        } else if let step = topStep, !step.isEmpty {
+                            nv.topAgentSubtitle = step
+                        } else {
+                            nv.topAgentSubtitle = "\(workingCount) active · Click or press ⌥⇧T"
+                        }
+                    } else {
+                        nv.topAgentTitle = "TheOne"
+                        nv.topAgentSubtitle = "All clear · Click or press ⌥⇧T"
+                    }
+                    if self.notchExpanded && !self.panel.isVisible {
+                        self.positionNotchHandle(expanded: true, animate: false)
+                    }
+                }
                 let shouldAutoOnly = (mode != "always")
                 if shouldAutoOnly != self.autoPopupOnly {
                     self.autoPopupOnly = shouldAutoOnly
                     self.autoMenuItem?.state = shouldAutoOnly ? .on : .off
                 }
                 if !shouldAutoOnly && !self.panel.isVisible && !self.stayHidden {
-                    self.showMainPanel()
+                    self.showMainPanel(focusForKeyboard: false)
                 }
                 self.applyUrgentState(count: actionCount, signature: signature)
             }
@@ -320,6 +684,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             : (count > 0 ? "TheOne — \(count) agent\(count == 1 ? "" : "s") need attention" : "TheOne — AI Agent Mission Control")
         edgeHandleView?.urgentCount = count
         edgeHandleView?.stayHidden = stayHidden
+        notchHandleView?.urgentCount = count
+        notchHandleView?.stayHidden = stayHidden
     }
 
     func applyUrgentState(count: Int, signature: String) {
@@ -641,6 +1007,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     @objc func handleScreenChange() {
         positionDockFrame(animate: false)
         positionEdgeHandle()
+        positionNotchHandle(expanded: notchExpanded, animate: false)
     }
 
     @objc func dock() {
@@ -724,6 +1091,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         stayItem.state = stayHidden ? .on : .off
         self.stayHiddenMenuItem = stayItem
         menu.addItem(stayItem)
+        let notchItem = NSMenuItem(
+            title: "Use Dynamic Notch Handle",
+            action: #selector(toggleNotchHandle(_:)),
+            keyEquivalent: "n"
+        )
+        notchItem.state = (handleStyle == "notch") ? .on : .off
+        self.notchMenuItem = notchItem
+        menu.addItem(notchItem)
         menu.addItem(withTitle: "Snap to Screen Edge", action: #selector(dock), keyEquivalent: "d")
         menu.addItem(withTitle: "Fit Active Window Beside Panel", action: #selector(fitActiveWindowBesidePanel), keyEquivalent: "f")
         let tileItem = NSMenuItem(
@@ -755,8 +1130,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             stayHiddenMenuItem?.state = .off
             manuallyShown = true
             updateMenuBarBadge(count: currentActionCount)
-            showMainPanel()
+            showMainPanel(focusForKeyboard: true)
             pollHubState()
+        }
+    }
+
+    @objc func toggleNotchHandle(_ sender: NSMenuItem) {
+        handleStyle = (handleStyle == "notch") ? "edge" : "notch"
+        sender.state = (handleStyle == "notch") ? .on : .off
+        if !panel.isVisible {
+            hideMainPanel()
+        }
+        // Persist handleStyle to hub settings
+        if let url = URL(string: "/api/settings", relativeTo: hubURL) {
+            var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 3)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try? JSONSerialization.data(withJSONObject: ["handleStyle": handleStyle])
+            URLSession.shared.dataTask(with: req).resume()
         }
     }
 
@@ -800,6 +1191,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             if let side = dict["dockSide"] as? String, side != dockSide {
                 dockSide = side
                 geometryChanged = true
+            }
+            if let hStyle = dict["handleStyle"] as? String, hStyle != handleStyle {
+                handleStyle = hStyle
+                notchMenuItem?.state = (hStyle == "notch") ? .on : .off
+                if !panel.isVisible {
+                    hideMainPanel()
+                }
             }
             if let w = dict["panelWidth"] as? CGFloat, abs(w - panelWidth) > 1 {
                 panelWidth = w

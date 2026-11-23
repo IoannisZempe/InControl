@@ -157,6 +157,8 @@ test('unit: Antigravity plugin installer & inspectAgentDelivery() in isolated HO
     const manifest = JSON.parse(fs.readFileSync(path.join(pluginDir, 'plugin.json'), 'utf8'));
     const hooks = JSON.parse(fs.readFileSync(path.join(pluginDir, 'hooks.json'), 'utf8'));
     const mcp = JSON.parse(fs.readFileSync(path.join(pluginDir, 'mcp_config.json'), 'utf8'));
+    const sidecar = JSON.parse(fs.readFileSync(path.join(pluginDir, 'sidecars', 'bridge', 'sidecar.json'), 'utf8'));
+    const userCfg = JSON.parse(fs.readFileSync(path.join(home, '.gemini', 'config', 'config.json'), 'utf8'));
 
     assert.equal(manifest.name, 'incontrol');
     assert.equal(hooks.incontrol.enabled, true);
@@ -165,6 +167,9 @@ test('unit: Antigravity plugin installer & inspectAgentDelivery() in isolated HO
       'Hook command must quote absolute process.execPath for GUI PATH independence'
     );
     assert.equal(mcp.mcpServers.incontrol.command, process.execPath);
+    assert.equal(sidecar.command, process.execPath);
+    assert.ok(sidecar.args.includes('sidecar') && sidecar.args.includes('agy'));
+    assert.equal(userCfg.sidecars['incontrol/bridge'].enabled, true);
     assert.ok(fs.existsSync(path.join(pluginDir, 'rules', 'AGENTS.md')), 'Plugin rule AGENTS.md must be installed');
 
     // Verify legacy incontrol hook entry was removed while third-party hook was preserved
@@ -185,6 +190,14 @@ test('unit: Antigravity plugin installer & inspectAgentDelivery() in isolated HO
     assert.equal(afterIdle.requiresWake, true);
     assert.equal(afterIdle.mode, 'queued-needs-wake');
     assert.ok(afterIdle.warning.includes('Copy + Focus'));
+
+    // When the live Antigravity sidecar bridge is registered, even an idle turn reports ready:true
+    idleAgy.metadata = { conversationId: 'conv-idle-bridge-1' };
+    store.registerProviderBridge('antigravity', () => true);
+    const afterIdleWithBridge = inspectAgentDelivery(store, idleAgy);
+    assert.equal(afterIdleWithBridge.ready, true);
+    assert.equal(afterIdleWithBridge.mode, 'sidecar-bridge');
+    store.unregisterProviderBridge('antigravity');
 
     // Verify scanAntigravitySessions() promotes confirmation questions into needs_input
     // and keeps completed responses in needs_attention well past 45s (2 minutes old)
@@ -578,7 +591,13 @@ test('unit: TheOne branding, icons, demo media, and CLI alias stay consistent', 
   assert.match(swiftPanel, /var stayHidden: Bool/);
   assert.match(swiftPanel, /cmd == "stay_hidden"/);
   assert.match(swiftPanel, /dismissedSignature/);
+  assert.match(swiftPanel, /final class NotchHandleView/);
+  assert.match(swiftPanel, /func sendQuickDecision/);
+  assert.match(swiftPanel, /toggleNotchHandle/);
   assert.match(indexHtml, /id="btn-close-stay-hidden"/);
+  assert.match(indexHtml, /id="cfg-handle-style"/);
+  assert.match(appJs, /is-kbd-selected/);
+  assert.match(appJs, /ArrowDown/);
 
   // Verify Forged Gold SVG icon and binary PNG/GIF/MP4 headers
   const iconSvg = fs.readFileSync(path.join(ROOT, 'public/icon.svg'), 'utf8');

@@ -2087,4 +2087,11 @@ html.macos-panel .panel-only-btn {
   flex-shrink: 0;
 }
 
+/* Keyboard-First Triage Selected Card Ring */
+.agent-card.is-kbd-selected {
+  border-color: rgba(232, 196, 104, 0.78) !important;
+  box-shadow: 0 0 0 1.5px rgba(232, 196, 104, 0.35), 0 8px 22px -6px rgba(0, 0, 0, 0.55);
+}
+
+
 

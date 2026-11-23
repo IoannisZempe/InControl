@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/manifest.json" />
   <title>TheOne</title>
-  <link rel="stylesheet" href="/styles.css?v=18" />
+  <link rel="stylesheet" href="/styles.css?v=19" />
 </head>
 <body data-theme="obsidian" data-logo="orbit">
   <div class="app-shell">
@@ -532,6 +532,14 @@ incontrol wrap --name "Aider" -- aider</pre>
           </div>
         </div>
 
+        <div class="wa-field">
+          <label for="cfg-handle-style">macOS Minimized Handle Style</label>
+          <select id="cfg-handle-style" class="wa-input">
+            <option value="notch">Dynamic Notch (Top-Center MacBook Notch)</option>
+            <option value="edge">Floating Edge Pill (Side of Screen)</option>
+          </select>
+        </div>
+
         <label class="wa-toggle-row">
           <span>Show 1-Click Custom Functions bar on agent cards</span>
           <input type="checkbox" id="cfg-show-functions" checked />
@@ -691,6 +699,6 @@ incontrol wrap --name "Aider" -- aider</pre>
     </div>
   </div>
 
-  <script src="/app.js?v=19" type="module"></script>
+  <script src="/app.js?v=20" type="module"></script>
 </body>
 </html>
