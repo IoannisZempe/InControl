@@ -1,16 +1,16 @@
 {
   "name": "incontrol-agents",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Always-on Side Panel & Cross-Device Mission Control for AI Coding Agents (Claude Code, Antigravity, Cursor, Codex, Aider & Custom Agents)",
   "license": "FSL-1.1-MIT",
   "author": "Ioannis Zempekakis <izempekakis@gmail.com> (https://x.com/ioanniszempe)",
-  "homepage": "https://github.com/IoannisZempe/InControl#readme",
+  "homepage": "https://github.com/real-iz/InControl#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/IoannisZempe/InControl.git"
+    "url": "git+https://github.com/real-iz/InControl.git"
   },
   "bugs": {
-    "url": "https://github.com/IoannisZempe/InControl/issues"
+    "url": "https://github.com/real-iz/InControl/issues"
   },
   "engines": {
     "node": ">=20"

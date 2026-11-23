@@ -6,4 +6,4 @@ This project follows the [Contributor Covenant, version 2.1](https://www.contrib
 
 ## Reporting
 
-To report unacceptable behavior, contact the maintainers privately through a [GitHub security advisory](https://github.com/IoannisZempe/InControl/security/advisories/new), by email at [izempekakis@gmail.com](mailto:izempekakis@gmail.com), or by direct message to [@IoannisZempe](https://github.com/IoannisZempe) / [@ioanniszempe on X](https://x.com/ioanniszempe). All reports are reviewed and kept confidential. Maintainers may remove content or ban contributors who violate this code.
+To report unacceptable behavior, contact the maintainers privately through a [GitHub security advisory](https://github.com/real-iz/InControl/security/advisories/new), by email at [izempekakis@gmail.com](mailto:izempekakis@gmail.com), or by direct message to [@IoannisZempe](https://github.com/IoannisZempe) / [@ioanniszempe on X](https://x.com/ioanniszempe). All reports are reviewed and kept confidential. Maintainers may remove content or ban contributors who violate this code.

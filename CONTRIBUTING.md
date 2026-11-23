@@ -5,7 +5,7 @@ Thanks for helping! InControl aims to be the place where you can see every AI ag
 ## Quick start
 
 ```bash
-git clone https://github.com/IoannisZempe/InControl.git
+git clone https://github.com/real-iz/InControl.git
 cd InControl
 npm install
 npm start        # hub at http://localhost:4747
